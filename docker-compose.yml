@@ -1,0 +1,5 @@
+# 本地已有 PostgreSQL 时可不使用本文件。
+# 连接约定：localhost:5432 / postgres / root / 库 postgres / 模式 dap
+#
+# 若需用 Docker 起库，请自行改端口与密码，并执行：
+#   CREATE SCHEMA IF NOT EXISTS dap;

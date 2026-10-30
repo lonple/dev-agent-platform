@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DAP · 自动化流水线工作台 Mock</title>
+  <style>
+    :root {
+      --dap-gray-0: #ffffff;
+      --dap-gray-50: #f7f8fa;
+      --dap-gray-100: #f0f2f5;
+      --dap-gray-200: #e5e7eb;
+      --dap-gray-300: #d1d5db;
+      --dap-gray-500: #8c8c8c;
+      --dap-gray-700: #4b5563;
+      --dap-gray-900: #1f2329;
+      --dap-primary: #2b5aed;
+      --dap-primary-hover: #1e4bd6;
+      --dap-primary-light: #eaf0ff;
+      --dap-warning: #d97706;
+      --dap-warning-bg: #fef3e2;
+      --dap-success: #16a34a;
+      --dap-success-bg: #e8f7ee;
+      --dap-danger: #dc2626;
+      --dap-radius-sm: 4px;
+      --dap-radius-md: 8px;
+      --font: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      font-size: 14px;
+      color: var(--dap-gray-900);
+      background: var(--dap-gray-50);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    button { font-family: inherit; }
+
+    /* —— 入口：需求详情（被工作台盖住） —— */
+    .entry {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .entry.hidden { display: none; }
+    .app-top {
+      height: 48px;
+      background: var(--dap-gray-0);
+      border-bottom: 1px solid var(--dap-gray-200);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .logo { font-weight: 600; color: var(--dap-primary); }
+    .nav a {
+      color: var(--dap-gray-700);
+      text-decoration: none;
+      margin-right: 12px;
+      padding: 4px 8px;
+      border-radius: var(--dap-radius-sm);
+    }
+    .nav a.active { background: var(--dap-primary-light); color: var(--dap-primary); font-weight: 500; }
+    .hint { margin-left: auto; font-size: 12px; color: var(--dap-gray-500); }
+    .entry-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 260px 1fr 280px;
+      min-height: 0;
+    }
+    .pane {
+      background: var(--dap-gray-0);
+      border-right: 1px solid var(--dap-gray-200);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .pane:last-child { border-right: none; border-left: 1px solid var(--dap-gray-200); }
+    .pane-hd {
+      height: 44px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--dap-gray-200);
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .pane-bd { padding: 12px 16px; overflow: auto; flex: 1; }
+    .req-item {
+      padding: 8px 10px;
+      border-radius: var(--dap-radius-sm);
+      border: 1px solid transparent;
+      background: var(--dap-primary-light);
+      border-color: #bfd0fb;
+      margin-bottom: 8px;
+    }
+    .req-item .no { font-size: 12px; color: var(--dap-gray-500); margin-right: 6px; }
+    .req-item .sub { font-size: 12px; color: var(--dap-warning); margin-top: 4px; }
+    .req-hd {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--dap-gray-200);
+    }
+    .req-hd h1 { margin: 0; font-size: 16px; }
+    .req-hd .actions { margin-left: auto; display: flex; gap: 8px; }
+    .muted { color: var(--dap-gray-500); font-size: 12px; }
+    .wiki-item { padding: 6px 8px; font-size: 13px; border-radius: var(--dap-radius-sm); }
+
+    /* —— 自动化工作台（单开全屏） —— */
+    .wb {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      background: var(--dap-gray-50);
+    }
+    .wb.show { display: flex; }
+
+    .wb-top {
+      height: 48px;
+      background: var(--dap-gray-0);
+      border-bottom: 1px solid var(--dap-gray-200);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .wb-top .title {
+      font-weight: 600;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .wb-top .title .code { color: var(--dap-gray-500); font-weight: 400; font-size: 13px; }
+    .wb-top .metrics {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--dap-gray-700);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .wb-top .actions { display: flex; gap: 8px; }
+
+    .summary {
+      background: var(--dap-gray-0);
+      border-bottom: 1px solid var(--dap-gray-200);
+      padding: 10px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+      font-size: 13px;
+      color: var(--dap-gray-700);
+      flex-shrink: 0;
+    }
+    .summary b { color: var(--dap-gray-900); font-weight: 500; }
+    .summary .sep { color: var(--dap-gray-300); }
+
+    .wb-main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: 0;
+      transition: grid-template-columns 0.15s ease;
+    }
+    .wb-main.ai-open { grid-template-columns: 220px 1fr 340px; }
+
+    .col {
+      background: var(--dap-gray-0);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      min-width: 0;
+    }
+    .col-flow { border-right: 1px solid var(--dap-gray-200); }
+    .col-detail { border-right: 1px solid var(--dap-gray-200); }
+    .col-ai {
+      display: none;
+      background: var(--dap-gray-0);
+    }
+    .wb-main.ai-open .col-ai { display: flex; }
+
+    .col-hd {
+      height: 40px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--dap-gray-200);
+      font-weight: 500;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .col-bd { flex: 1; overflow: auto; padding: 8px 0; min-height: 0; }
+    .col-detail .col-bd { padding: 14px 16px; }
+
+    .tag {
+      display: inline-block;
+      font-size: 12px;
+      padding: 0 6px;
+      border-radius: var(--dap-radius-sm);
+      line-height: 20px;
+      vertical-align: middle;
+    }
+    .tag-info { background: var(--dap-gray-100); color: var(--dap-gray-700); }
+    .tag-warn { background: var(--dap-warning-bg); color: var(--dap-warning); }
+    .tag-ok { background: var(--dap-success-bg); color: var(--dap-success); }
+    .tag-run { background: var(--dap-primary-light); color: var(--dap-primary); }
+    .tag-bad { background: #fee2e2; color: var(--dap-danger); }
+
+    .btn {
+      border: 1px solid var(--dap-gray-200);
+      background: var(--dap-gray-0);
+      color: var(--dap-gray-900);
+      border-radius: var(--dap-radius-sm);
+      padding: 5px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn:hover { border-color: var(--dap-primary); color: var(--dap-primary); }
+    .btn-primary {
+      background: var(--dap-primary);
+      border-color: var(--dap-primary);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--dap-primary-hover); color: #fff; }
+    .btn-danger-plain {
+      color: var(--dap-danger);
+      border-color: #f5c2c2;
+      background: #fff;
+    }
+    .btn-danger-plain:hover { border-color: var(--dap-danger); }
+    .btn-sm { padding: 3px 10px; font-size: 12px; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .step {
+      width: 100%;
+      text-align: left;
+      border: none;
+      background: transparent;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      color: var(--dap-gray-700);
+      border-left: 2px solid transparent;
+    }
+    .step:hover { background: var(--dap-gray-50); }
+    .step.current {
+      background: var(--dap-primary-light);
+      color: var(--dap-primary);
+      font-weight: 500;
+      border-left-color: var(--dap-primary);
+    }
+    .step .ico { width: 14px; flex-shrink: 0; text-align: center; line-height: 1.4; }
+    .step .body { flex: 1; min-width: 0; }
+    .step .name { display: block; line-height: 1.35; }
+    .step .meta { display: block; font-size: 11px; color: var(--dap-gray-500); margin-top: 2px; font-weight: 400; }
+    .step.current .meta { color: #6b8af0; }
+    .step.revise .name::after {
+      content: "整改";
+      margin-left: 6px;
+      font-size: 10px;
+      padding: 0 4px;
+      border-radius: 2px;
+      background: var(--dap-warning-bg);
+      color: var(--dap-warning);
+      font-weight: 500;
+    }
+
+    .detail-title {
+      margin: 0 0 10px;
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 16px;
+      margin-bottom: 14px;
+      font-size: 13px;
+    }
+    .detail-grid label {
+      display: block;
+      font-size: 12px;
+      color: var(--dap-gray-500);
+      margin-bottom: 2px;
+    }
+    .doc-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .link-btn {
+      border: 1px solid var(--dap-gray-200);
+      background: var(--dap-gray-50);
+      color: var(--dap-primary);
+      border-radius: var(--dap-radius-sm);
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .link-btn:hover { border-color: var(--dap-primary); background: var(--dap-primary-light); }
+    .link-btn:disabled { color: var(--dap-gray-500); cursor: default; border-color: var(--dap-gray-200); background: var(--dap-gray-50); }
+
+    .gate {
+      border-top: 1px solid var(--dap-gray-200);
+      margin-top: 8px;
+      padding-top: 14px;
+    }
+    .gate h4 { margin: 0 0 6px; font-size: 13px; }
+    .gate h5 {
+      margin: 14px 0 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--dap-gray-700);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .gate .note {
+      font-size: 12px;
+      color: var(--dap-gray-500);
+      margin-bottom: 10px;
+      line-height: 1.55;
+    }
+    .gate textarea {
+      width: 100%;
+      border: 1px solid var(--dap-gray-200);
+      border-radius: var(--dap-radius-sm);
+      padding: 8px 10px;
+      font-family: inherit;
+      font-size: 13px;
+      resize: vertical;
+      min-height: 56px;
+      margin-bottom: 0;
+    }
+    .gate textarea:focus { outline: none; border-color: var(--dap-primary); }
+    .rv-card {
+      border: 1px solid var(--dap-gray-200);
+      border-radius: var(--dap-radius-md);
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: var(--dap-gray-0);
+    }
+    .rv-card.done-agree { border-color: #86efac; background: #f7fdf9; }
+    .rv-card.done-disagree { border-color: #fca5a5; background: #fffafa; }
+    .rv-card.done-answered { border-color: #93c5fd; background: #f8fbff; }
+    .rv-hd {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .rv-hd .id {
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--dap-primary);
+      flex-shrink: 0;
+    }
+    .rv-hd .desc { flex: 1; font-size: 13px; line-height: 1.45; }
+    .rv-meta {
+      font-size: 12px;
+      color: var(--dap-gray-700);
+      line-height: 1.55;
+      margin-bottom: 8px;
+    }
+    .rv-meta .rec { color: var(--dap-warning); font-weight: 500; }
+    .rv-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .rv-extra { margin-top: 8px; }
+    .rv-extra label {
+      display: block;
+      font-size: 12px;
+      color: var(--dap-gray-500);
+      margin-bottom: 4px;
+    }
+    .chip-on {
+      background: var(--dap-primary-light);
+      border-color: var(--dap-primary);
+      color: var(--dap-primary);
+    }
+    .gate-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+    .gate-actions .grow { flex: 1; }
+    .gate-summary {
+      font-size: 12px;
+      color: var(--dap-gray-700);
+      padding: 8px 10px;
+      background: var(--dap-gray-50);
+      border-radius: var(--dap-radius-sm);
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    .ai-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .task-units { margin-top: 12px; }
+    .task-units > .lab {
+      font-size: 12px;
+      color: var(--dap-gray-500);
+      margin-bottom: 8px;
+    }
+    .tu {
+      border: 1px solid var(--dap-gray-200);
+      border-radius: var(--dap-radius-md);
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: var(--dap-gray-0);
+    }
+    .tu-hd {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+    .tu-hd .name { font-weight: 600; font-size: 13px; flex: 1; }
+    .tu-meta { font-size: 12px; color: var(--dap-gray-700); line-height: 1.55; margin-bottom: 8px; }
+    .tu-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .role-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: var(--dap-primary-light);
+      border-bottom: 1px solid #bfd0fb;
+      font-size: 12px;
+      color: var(--dap-gray-700);
+      flex-shrink: 0;
+    }
+    .role-bar select {
+      border: 1px solid var(--dap-gray-200);
+      border-radius: var(--dap-radius-sm);
+      padding: 2px 8px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .auto-pass-note {
+      font-size: 12px;
+      color: var(--dap-success);
+      background: var(--dap-success-bg);
+      padding: 8px 10px;
+      border-radius: var(--dap-radius-sm);
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    .sess-body {
+      flex: 1;
+      overflow: auto;
+      padding: 12px;
+      background: var(--dap-gray-50);
+      min-height: 0;
+    }
+    .msg {
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border-radius: var(--dap-radius-sm);
+      background: var(--dap-gray-0);
+      border: 1px solid var(--dap-gray-200);
+    }
+    .msg .role {
+      font-size: 11px;
+      color: var(--dap-gray-500);
+      margin-bottom: 4px;
+      text-transform: lowercase;
+    }
+    .msg.user { border-left: 2px solid var(--dap-primary); }
+    .msg.assistant { border-left: 2px solid var(--dap-success); }
+    .msg.tool {
+      border-left: 2px solid var(--dap-warning);
+      font-size: 12px;
+      color: var(--dap-gray-700);
+    }
+    .msg pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--dap-gray-900);
+    }
+    .sess-empty {
+      text-align: center;
+      color: var(--dap-gray-500);
+      font-size: 13px;
+      padding: 32px 12px;
+    }
+
+    /* 预览抽屉 */
+    .mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(31, 35, 41, 0.35);
+      display: none;
+      z-index: 40;
+    }
+    .mask.show { display: block; }
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(480px, 100%);
+      height: 100%;
+      background: var(--dap-gray-0);
+      box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+      z-index: 50;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer-hd {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--dap-gray-200);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .drawer-hd h2 { margin: 0; font-size: 15px; flex: 1; }
+    .drawer-bd {
+      padding: 16px;
+      overflow: auto;
+      flex: 1;
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--dap-gray-700);
+      white-space: pre-wrap;
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      font-size: 12px;
+      background: var(--dap-gray-50);
+    }
+
+    .toast {
+      position: fixed;
+      top: 56px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--dap-gray-900);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: var(--dap-radius-sm);
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 60;
+      max-width: 90vw;
+    }
+    .toast.show { opacity: 1; }
+
+    .screens {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      z-index: 30;
+      display: flex;
+      gap: 8px;
+      background: var(--dap-gray-0);
+      border: 1px solid var(--dap-gray-200);
+      border-radius: var(--dap-radius-md);
+      padding: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+    .screens button.active {
+      background: var(--dap-primary-light);
+      border-color: var(--dap-primary);
+      color: var(--dap-primary);
+    }
+
+    @media (max-width: 960px) {
+      .wb-main, .wb-main.ai-open { grid-template-columns: 1fr; grid-template-rows: 180px 1fr auto; }
+      .col-flow { border-right: none; border-bottom: 1px solid var(--dap-gray-200); max-height: 180px; }
+      .col-ai { max-height: 240px; border-top: 1px solid var(--dap-gray-200); }
+      .entry-body { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- ========== 入口：需求详情 ========== -->
+  <div class="entry" id="entry">
+    <header class="app-top">
+      <div class="logo">DAP</div>
+      <nav class="nav">
+        <a href="#">首页</a>
+        <a class="active" href="#">工作台</a>
+        <a href="#">系统配置</a>
+      </nav>
+      <span class="hint">Mock · 点「自动化流水线」单开工作台</span>
+    </header>
+    <div class="entry-body">
+      <aside class="pane">
+        <div class="pane-hd">需求列表</div>
+        <div class="pane-bd">
+          <div class="req-item">
+            <div><span class="no">REQ-2026-001</span>登录体验优化 <span class="tag tag-warn">等待确认</span></div>
+            <div class="sub">流水线 · 架构师确认初审</div>
+          </div>
+        </div>
+      </aside>
+      <main class="pane">
+        <div class="pane-hd">需求详情</div>
+        <div class="pane-bd">
+          <div class="req-hd">
+            <h1><span class="no" style="color:var(--dap-gray-500);font-weight:400">REQ-2026-001</span> 登录体验优化</h1>
+            <span class="tag tag-run">研发中</span>
+            <div class="actions">
+              <button type="button" class="btn btn-sm">创建任务</button>
+              <button type="button" class="btn btn-sm btn-primary" onclick="openWorkbench()">自动化流水线</button>
+            </div>
+          </div>
+          <p class="muted">粗状态 / 手动任务与流水线互不门禁。点击右侧主按钮进入专用自动化工作台。</p>
+          <p style="margin-top:16px;font-size:13px;color:var(--dap-gray-700)">关联产品：账号中心 · 处理人：王架构</p>
+        </div>
+      </main>
+      <aside class="pane">
+        <div class="pane-hd">Wiki</div>
+        <div class="pane-bd">
+          <div class="wiki-item">📁 REQ-2026-001</div>
+          <div class="wiki-item" style="padding-left:16px">📄 原始需求.md</div>
+          <div class="wiki-item" style="padding-left:16px">📄 PRD-v1.md</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ========== 单开：自动化工作台 ========== -->
+  <div class="wb" id="workbench">
+    <header class="wb-top">
+      <button type="button" class="btn btn-sm" onclick="closeWorkbench()">← 返回需求</button>
+      <div class="title">
+        <span class="code">REQ-2026-001</span>
+        <span>登录体验优化</span>
+        <span class="tag" id="instStatusTag">等待确认</span>
+      </div>
+      <div class="metrics">
+        <span>耗时 <b id="metricDur">12m</b></span>
+        <span>Token <b id="metricTok">48.2k</b></span>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-sm" onclick="toast('已刷新（演示）')">刷新</button>
+        <button type="button" class="btn btn-sm btn-danger-plain" onclick="onCancel()">取消自动化</button>
+      </div>
+    </header>
+
+    <div class="role-bar">
+      <span>演示视角（当前登录岗位）</span>
+      <select id="viewerRole" onchange="setViewerRole(this.value)">
+        <option value="PM">产品经理</option>
+        <option value="ARCH">架构师</option>
+        <option value="BOTH" selected>同一人（产品+架构兼岗）</option>
+        <option value="DEV">研发（只读 AI 初审）</option>
+      </select>
+      <span class="muted">本岗可触发自己的 AI 任务单元；其他岗可看不可触发</span>
+    </div>
+
+    <div class="summary" id="summaryBar">
+      <span>定义 <b>研发自动化</b> v1</span>
+      <span class="sep">|</span>
+      <span>当前 <b id="sumCurrent">AI 初审</b></span>
+      <span class="sep">|</span>
+      <span>等待原因 <b id="sumWait">待执行双 Agent</b></span>
+      <span class="sep">|</span>
+      <span>本节点轮次 <b id="sumRound">1</b> / max 3</span>
+    </div>
+
+    <div class="wb-main" id="wbMain">
+      <!-- 左：任务流程 -->
+      <section class="col col-flow">
+        <div class="col-hd">任务流程</div>
+        <div class="col-bd" id="timeline"></div>
+      </section>
+
+      <!-- 中：节点信息 -->
+      <section class="col col-detail">
+        <div class="col-hd">
+          <span>节点基本信息</span>
+          <span class="muted" id="detailHint"></span>
+        </div>
+        <div class="col-bd" id="detail"></div>
+      </section>
+
+      <!-- 右：AI 执行 -->
+      <section class="col col-ai">
+        <div class="col-hd">
+          <span>AI 执行过程</span>
+          <span class="muted" id="sessIdLabel"></span>
+        </div>
+        <div class="sess-body" id="session"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="mask" id="mask" onclick="closeDrawer()"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-hd">
+      <div style="flex:1">
+        <h2 id="drawerTitle">预览</h2>
+        <div class="muted" id="drawerSub" style="margin-top:4px"></div>
+      </div>
+      <button type="button" class="btn btn-sm" onclick="closeDrawer()">关闭</button>
+    </div>
+    <div class="drawer-bd" id="drawerBody"></div>
+  </aside>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="screens">
+    <button type="button" class="btn btn-sm" onclick="closeWorkbench()">场景：需求详情</button>
+    <button type="button" class="btn btn-sm active" id="scrWb" onclick="openWorkbench()">场景：自动化工作台</button>
+    <button type="button" class="btn btn-sm" onclick="selectStep('ai_pre')">跳到 AI 初审</button>
+    <button type="button" class="btn btn-sm" onclick="selectStep('confirm_prd')">跳到人闸确认</button>
+    <button type="button" class="btn btn-sm" onclick="selectStep('pm_first')">看 PM 初审(自动过)</button>
+  </div>
+
+  <script>
+    /**
+     * Mock 状态机（不接 API）
+     * 人闸：通过 → 下一步；未通过 → AI 整改 → 再回人闸
+     * 取消：结束整条实例（与「未通过」分开）
+     */
+    const DOCS = {
+      raw: { title: "输入 · 原始需求.md", body: "# 原始需求\n\n优化登录页体验：减少步骤、记住设备、错误提示可读。\n\n## 范围\n- Web 端登录\n- 不含 SSO 改造" },
+      prd: { title: "输出 · PRD-v1.md", body: "# 需求分析 PRD v1\n\n## FR-01 记住设备\n…\n\n## FR-03 并发登录提示\n（待补验收标准）" },
+      review_biz: {
+        title: "输出 · 原始需求业务评估.md",
+        body: "# 原始需求业务评估报告\n\n## 五、业务风险\n| BR1 | … |\n\n## 六、疑似问题\n| B1 | … |"
+      },
+      review_tech: {
+        title: "输出 · 原始需求技术评估.md",
+        body: "# 原始需求技术评估报告\n\n## 技术风险\n| TR1 | … |\n\n## 疑似问题\n| T1 | … |"
+      },
+      review: {
+        title: "输出 · 评审书-架构师.md",
+        body: "# 评审结果（AI生成）\n\n## 问题清单\n| 2 | 未说明缓存失效策略 | P1 | … | ① |\n\n## 疑似问题\n| A1 | AI假设「用户手机号全局唯一」 | … |"
+      },
+      prompt_gen: {
+        title: "首次提示词 · 生成 PRD",
+        body: "你是「AI 产品经理」。请基于《原始需求.md》撰写需求分析 PRD。"
+      },
+      prompt_biz: {
+        title: "首次提示词 · 业务评审（AI 产品经理）",
+        body: "你是「AI 产品经理」。请按《原始需求评估模板-业务》输出业务风险与疑似问题。\n\n【输入】原始需求.md"
+      },
+      prompt_tech: {
+        title: "首次提示词 · 技术评审（AI 架构师）",
+        body: "你是「AI 架构师」。请按《原始需求评估模板-技术》输出技术风险与疑似问题。\n\n【输入】原始需求.md"
+      },
+      prompt_review: {
+        title: "首次提示词 · AI 架构评 PRD",
+        body: "你是「AI 架构师」。请按《评审模板》输出问题清单 + 疑似问题。\n\n【输入】PRD-v1.md"
+      },
+      prompt_revise: {
+        title: "首次提示词 · 整改 PRD",
+        body: "你是「AI 产品经理」。请根据人类确认结果修订文档并升版。"
+      }
+    };
+
+    const SESSIONS = {
+      gen_prd: [
+        { role: "user", text: "（kickoff）请按模板生成 PRD…" },
+        { role: "tool", text: "read_wiki → 原始需求.md" },
+        { role: "assistant", text: "已生成 PRD-v1，写入 Wiki。" }
+      ],
+      pre_biz: [
+        { role: "user", text: "（kickoff）业务评估…" },
+        { role: "tool", text: "read_wiki → 原始需求.md" },
+        { role: "assistant", text: "已输出业务风险 + 疑似问题。" }
+      ],
+      pre_tech: [
+        { role: "user", text: "（kickoff）技术评估…" },
+        { role: "tool", text: "read_wiki → 原始需求.md" },
+        { role: "assistant", text: "已输出技术风险 + 疑似问题。" }
+      ],
+      review_prd: [
+        { role: "user", text: "（kickoff）请评审 PRD…" },
+        { role: "tool", text: "read_wiki → PRD-v1.md" },
+        { role: "assistant", text: "已输出问题清单 + 疑似问题。" }
+      ],
+      revise_prd: [
+        { role: "user", text: "（kickoff）按审批意见整改…" },
+        { role: "tool", text: "read_wiki → PRD-v1.md" },
+        { role: "assistant", text: "已补充 FR-03，输出 PRD-v2。" }
+      ]
+    };
+
+    let viewerRole = "BOTH";
+    let activeTaskId = null;
+    let steps = [];
+    let selectedId = null;
+    let instanceStatus = "RUNNING";
+    let reviseRound = 1;
+
+    function seedSteps() {
+      steps = [
+        {
+          id: "pm_first", name: "产品经理初审", kind: "human", status: "SUCCEEDED", round: 1,
+          role: "PM", inputs: ["raw"], outputs: [], gate: true, autoPass: true
+        },
+        {
+          id: "ai_pre", name: "AI 初审", kind: "ai_review", status: "WAITING_TRIGGER", round: 1,
+          role: "PM+ARCH", inputs: ["raw"], outputs: [],
+          tasks: [
+            {
+              id: "pre_biz", name: "业务评审", ownerRole: "PM", agent: "AI 产品经理",
+              template: "原始需求评估模板-业务", status: "WAITING_TRIGGER",
+              promptKey: "prompt_biz", sessionKey: "pre_biz", outputKey: "review_biz"
+            },
+            {
+              id: "pre_tech", name: "技术评审", ownerRole: "ARCH", agent: "AI 架构师",
+              template: "原始需求评估模板-技术", status: "WAITING_TRIGGER",
+              promptKey: "prompt_tech", sessionKey: "pre_tech", outputKey: "review_tech"
+            }
+          ]
+        },
+        { id: "pm_confirm", name: "初审有效确认", kind: "human", status: "PENDING", round: 1, role: "PM+ARCH", inputs: ["review_biz", "review_tech"], outputs: [], gate: true },
+        { id: "pm_second", name: "产品经理二审", kind: "human", status: "PENDING", round: 1, role: "PM", inputs: ["raw"], outputs: [], gate: true },
+        { id: "gen_prd", name: "生成需求分析", kind: "ai_gen", status: "PENDING", round: 1, role: "PM", inputs: ["raw"], outputs: ["prd"], promptKey: "prompt_gen", sessionKey: "gen_prd" },
+        { id: "review_prd", name: "AI 架构评 PRD", kind: "ai_review", status: "PENDING", round: 1, role: "ARCH", inputs: ["prd"], outputs: ["review"], promptKey: "prompt_review", sessionKey: "review_prd" },
+        { id: "confirm_prd", name: "架构师确认初审", kind: "human", status: "PENDING", round: 1, role: "ARCH", inputs: ["prd", "review"], outputs: [], gate: true },
+        { id: "gen_arch", name: "生成架构设计", kind: "ai_gen", status: "PENDING", round: 1, role: "ARCH", inputs: ["prd"], outputs: [], promptKey: "prompt_gen" },
+        { id: "gen_ui", name: "生成 UI 规范", kind: "ai_gen", status: "PENDING", round: 1, role: "UI", inputs: ["prd"], outputs: [], promptKey: "prompt_gen" },
+        { id: "done", name: "流水线结束", kind: "system", status: "PENDING", round: 1, role: "—", inputs: [], outputs: [] }
+      ];
+      selectedId = "ai_pre";
+      activeTaskId = "pre_biz";
+      instanceStatus = "RUNNING";
+      reviseRound = 1;
+    }
+
+    function setViewerRole(v) {
+      viewerRole = v;
+      render();
+    }
+
+    function canTriggerRole(ownerRole) {
+      if (viewerRole === "BOTH") return ownerRole === "PM" || ownerRole === "ARCH";
+      return viewerRole === ownerRole;
+    }
+
+    function syncAiPreStatus(step) {
+      if (!step.tasks) return;
+      const sts = step.tasks.map((t) => t.status);
+      if (sts.every((x) => x === "SUCCEEDED")) {
+        step.status = "SUCCEEDED";
+        step.outputs = step.tasks.map((t) => t.outputKey).filter(Boolean);
+      } else if (sts.some((x) => x === "RUNNING")) {
+        step.status = "RUNNING";
+      } else {
+        step.status = "WAITING_TRIGGER";
+      }
+    }
+
+    function kindLabel(k) {
+      return ({ human: "人闸审批", ai_gen: "AI 生成", ai_review: "AI 评审", ai_revise: "AI 整改", system: "系统" })[k] || k;
+    }
+
+    function statusIcon(s) {
+      if (s === "SUCCEEDED") return "✓";
+      if (s === "FAILED" || s === "CANCELLED") return "!";
+      if (["WAITING_HUMAN", "WAITING_TRIGGER", "RUNNING"].includes(s)) return "►";
+      return "○";
+    }
+
+    function statusTagClass(s) {
+      if (s === "WAITING_HUMAN" || s === "WAITING_TRIGGER") return "tag-warn";
+      if (s === "RUNNING") return "tag-run";
+      if (s === "SUCCEEDED" || s === "DONE") return "tag-ok";
+      if (s === "FAILED" || s === "CANCELLED") return "tag-bad";
+      return "tag-info";
+    }
+
+    function statusText(s) {
+      const map = {
+        WAITING_HUMAN: "等待确认",
+        WAITING_TRIGGER: "待执行",
+        RUNNING: "运行中",
+        SUCCEEDED: "已完成",
+        PENDING: "未到达",
+        FAILED: "失败",
+        CANCELLED: "已取消",
+        DONE: "已完成"
+      };
+      return map[s] || s;
+    }
+
+    function currentStep() {
+      return steps.find((s) => ["WAITING_HUMAN", "WAITING_TRIGGER", "RUNNING"].includes(s.status))
+        || steps.find((s) => s.id === selectedId)
+        || steps[0];
+    }
+
+    function selectedStep() {
+      return steps.find((s) => s.id === selectedId) || currentStep();
+    }
+
+    function isAi(step) {
+      return step && String(step.kind).startsWith("ai_");
+    }
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("show"), 2400);
+    }
+
+    function openWorkbench() {
+      document.getElementById("entry").classList.add("hidden");
+      document.getElementById("workbench").classList.add("show");
+      document.getElementById("scrWb").classList.add("active");
+      render();
+    }
+
+    function closeWorkbench() {
+      document.getElementById("entry").classList.remove("hidden");
+      document.getElementById("workbench").classList.remove("show");
+      document.getElementById("scrWb").classList.remove("active");
+    }
+
+    function selectStep(id) {
+      selectedId = id;
+      render();
+    }
+
+    function render() {
+      const cur = currentStep();
+      const sel = selectedStep();
+
+      const tag = document.getElementById("instStatusTag");
+      tag.textContent = statusText(instanceStatus === "DONE" ? "DONE" : instanceStatus);
+      tag.className = "tag " + statusTagClass(instanceStatus === "DONE" ? "DONE" : instanceStatus);
+
+      document.getElementById("sumCurrent").textContent = cur ? cur.name : "—";
+      const curStep = cur;
+      let waitText = "—";
+      if (instanceStatus === "WAITING_HUMAN") waitText = "人闸审批";
+      else if (instanceStatus === "CANCELLED") waitText = "已取消";
+      else if (instanceStatus === "DONE") waitText = "—";
+      else if (curStep && curStep.tasks) {
+        const left = curStep.tasks.filter((t) => t.status !== "SUCCEEDED").length;
+        waitText = left ? "双 Agent 待齐（剩 " + left + "）" : "AI 执行中";
+      } else if (instanceStatus === "RUNNING") waitText = "AI 执行中";
+      document.getElementById("sumWait").textContent = waitText;
+      document.getElementById("sumRound").textContent = String(sel && sel.gate ? sel.round : reviseRound);
+
+      const tl = document.getElementById("timeline");
+      tl.innerHTML = steps.map((s) => {
+        const cls = [
+          "step",
+          s.id === selectedId ? "current" : "",
+          s.kind === "ai_revise" ? "revise" : ""
+        ].filter(Boolean).join(" ");
+        const color = s.status === "SUCCEEDED" ? "color:var(--dap-success)"
+          : (s.status === "FAILED" || s.status === "CANCELLED") ? "color:var(--dap-danger)" : "";
+        return `<button type="button" class="${cls}" onclick="selectStep('${s.id}')">
+          <span class="ico" style="${color}">${statusIcon(s.status)}</span>
+          <span class="body">
+            <span class="name">${s.name}</span>
+            <span class="meta">${kindLabel(s.kind)} · ${statusText(s.status)}${s.round > 1 ? " · r" + s.round : ""}</span>
+          </span>
+        </button>`;
+      }).join("");
+
+      renderDetail(sel);
+      renderSession(sel);
+    }
+
+    function renderDetail(s) {
+      const box = document.getElementById("detail");
+      const hint = document.getElementById("detailHint");
+      if (!s) {
+        box.innerHTML = "<p class='muted'>未选择节点</p>";
+        return;
+      }
+      hint.textContent = kindLabel(s.kind);
+
+      const inputBtns = (s.inputs || []).map((k) =>
+        `<button type="button" class="link-btn" onclick="openDoc('${k}')">输入 · ${DOCS[k] ? DOCS[k].title.replace(/^输入 · /, "") : k}</button>`
+      ).join("");
+      const outputBtns = (s.outputs || []).length
+        ? (s.outputs || []).map((k) =>
+          `<button type="button" class="link-btn" onclick="openDoc('${k}')">输出 · ${DOCS[k] ? DOCS[k].title.replace(/^输出 · /, "") : k}</button>`
+        ).join("")
+        : `<button type="button" class="link-btn" disabled>暂无输出文档</button>`;
+
+      const promptBtn = s.promptKey
+        ? `<button type="button" class="link-btn" onclick="openDoc('${s.promptKey}')">查看首次提示词</button>`
+        : (s.tasks ? "" : `<button type="button" class="link-btn" disabled>无人值守提示词</button>`);
+
+      let gateHtml = "";
+      if (s.autoPass && s.status === "SUCCEEDED") {
+        gateHtml = `<div class="auto-pass-note">自动化流程内本节点<strong>默认直接通过</strong>（不停留等人点确认）。时间线仍保留节点便于追溯。</div>`;
+      } else if (s.gate && s.status === "WAITING_HUMAN" && instanceStatus !== "CANCELLED" && instanceStatus !== "DONE") {
+        gateHtml = renderGatePanel(s);
+      } else if (s.gate && s.status === "SUCCEEDED") {
+        gateHtml = `<div class="gate"><div class="note">本节点已确认（演示）。</div></div>`;
+      }
+
+      let aiAct = "";
+      if (s.tasks && s.tasks.length) {
+        aiAct = renderTaskUnits(s);
+      } else if (isAi(s) && s.status === "WAITING_TRIGGER") {
+        const can = canTriggerRole(s.role === "AI_PM" || s.role === "PM" ? "PM" : s.role === "AI_ARCH" || s.role === "ARCH" ? "ARCH" : s.role);
+        aiAct = `<div class="ai-actions">
+          <button type="button" class="btn btn-primary btn-sm" ${can ? "" : "disabled"} onclick="onRunAi('${s.id}')">执行 AI</button>
+          ${can ? "" : "<span class='muted'>当前视角无本岗触发权，仅可查看</span>"}
+        </div>`;
+      } else if (isAi(s) && s.status === "RUNNING") {
+        aiAct = `<div class="ai-actions"><span class="muted">演示：生成中…</span>
+          <button type="button" class="btn btn-sm" onclick="onFinishAi('${s.id}')">模拟完成</button></div>`;
+      }
+
+      box.innerHTML = `
+        <h3 class="detail-title">${s.name} <span class="tag ${statusTagClass(s.status)}">${statusText(s.status)}</span>${s.autoPass ? ' <span class="tag tag-ok">默认通过</span>' : ""}</h3>
+        <div class="detail-grid">
+          <div><label>执行类型</label>${kindLabel(s.kind)}</div>
+          <div><label>岗位</label>${s.role}</div>
+          <div><label>轮次</label>r${s.round}</div>
+          <div><label>节点 ID</label><span class="muted">${s.id}</span></div>
+        </div>
+        <div class="muted" style="margin-bottom:6px">文档与提示词</div>
+        <div class="doc-row">${inputBtns}${outputBtns}${promptBtn}</div>
+        ${aiAct}
+        ${gateHtml}`;
+    }
+
+    function renderTaskUnits(s) {
+      const cards = s.tasks.map((t) => {
+        const can = canTriggerRole(t.ownerRole);
+        const mine = can ? "本岗可触发" : "可看 · 不可触发";
+        const outBtn = t.status === "SUCCEEDED" && t.outputKey
+          ? `<button type="button" class="link-btn" onclick="openDoc('${t.outputKey}')">输出文档</button>`
+          : "";
+        const promptBtn = `<button type="button" class="link-btn" onclick="openDoc('${t.promptKey}')">首次提示词</button>`;
+        let act = "";
+        if (t.status === "WAITING_TRIGGER") {
+          act = `<button type="button" class="btn btn-primary btn-sm" ${can ? "" : "disabled"}
+            onclick="onRunTask('${s.id}','${t.id}')">执行 Agent</button>`;
+        } else if (t.status === "RUNNING") {
+          act = `<button type="button" class="btn btn-sm" onclick="onFinishTask('${s.id}','${t.id}')">模拟完成</button>`;
+        } else if (t.status === "SUCCEEDED") {
+          act = `<span class="muted">已完成</span>`;
+        }
+        const sel = activeTaskId === t.id ? " style=\"outline:1px solid var(--dap-primary)\"" : "";
+        return `<div class="tu"${sel}>
+          <div class="tu-hd">
+            <span class="name">${t.name}</span>
+            <span class="tag ${statusTagClass(t.status)}">${statusText(t.status)}</span>
+            <span class="tag tag-info">${t.ownerRole === "PM" ? "产品" : "架构"}</span>
+          </div>
+          <div class="tu-meta">
+            Agent：${t.agent}<br />
+            模板：${t.template}<br />
+            权限：${mine}${viewerRole === "BOTH" ? "（当前兼岗，两单元均可触发）" : ""}
+          </div>
+          <div class="tu-actions">
+            ${promptBtn}${outBtn}
+            <button type="button" class="btn btn-sm" onclick="focusTask('${t.id}')">查看执行</button>
+            ${act}
+          </div>
+        </div>`;
+      }).join("");
+      return `<div class="task-units">
+        <div class="lab">任务单元（本节点需两个 Agent 都完成才离开 AI 初审）</div>
+        ${cards}
+      </div>`;
+    }
+
+    function focusTask(tid) {
+      activeTaskId = tid;
+      render();
+    }
+
+    function renderSession(s) {
+      const main = document.getElementById("wbMain");
+      const sess = document.getElementById("session");
+      const label = document.getElementById("sessIdLabel");
+      if (isAi(s)) {
+        main.classList.add("ai-open");
+        let sessionKey = s.sessionKey;
+        let title = "节点会话";
+        if (s.tasks && s.tasks.length) {
+          const t = s.tasks.find((x) => x.id === activeTaskId) || s.tasks[0];
+          sessionKey = t.sessionKey;
+          title = t.name;
+          activeTaskId = t.id;
+        }
+        label.textContent = title + (sessionKey ? " · #" + sessionKey : "");
+        const msgs = SESSIONS[sessionKey] || [];
+        const started = s.tasks
+          ? (s.tasks.find((x) => x.id === activeTaskId) || {}).status !== "WAITING_TRIGGER"
+          : s.status !== "WAITING_TRIGGER" && s.status !== "PENDING";
+        if (s.status === "PENDING") {
+          sess.innerHTML = `<div class="sess-empty">节点未到达</div>`;
+        } else if (!started || !msgs.length) {
+          sess.innerHTML = `<div class="sess-empty">选择任务单元并点「执行 Agent」后显示消息流</div>`;
+        } else {
+          sess.innerHTML = msgs.map((m) =>
+            `<div class="msg ${m.role}"><div class="role">${m.role}</div><pre>${escapeHtml(m.text)}</pre></div>`
+          ).join("");
+        }
+      } else {
+        main.classList.remove("ai-open");
+        sess.innerHTML = "";
+        label.textContent = "";
+      }
+    }
+
+    function escapeHtml(t) {
+      return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function openDoc(key) {
+      const d = DOCS[key];
+      if (!d) return;
+      document.getElementById("drawerTitle").textContent = d.title;
+      document.getElementById("drawerSub").textContent = "只读预览 · Mock 样例";
+      document.getElementById("drawerBody").textContent = d.body;
+      document.getElementById("mask").classList.add("show");
+      document.getElementById("drawer").classList.add("open");
+    }
+
+    function closeDrawer() {
+      document.getElementById("mask").classList.remove("show");
+      document.getElementById("drawer").classList.remove("open");
+    }
+
+    /**
+     * 人闸两类项（对齐评审模板 / 原始需求评估）
+     * confirmed = 问题清单·业务风险：同意采纳推荐 / 不同意并写意见
+     * suspected = 疑似问题：人类必答
+     */
+    const gateState = {
+      confirmed: [
+        {
+          id: "2",
+          title: "未说明缓存失效策略",
+          severity: "P1",
+          suggestions: "①补充 TTL/主动失效规则；②说明与一致性要求的取舍",
+          recommend: "①",
+          section: "问题清单",
+          decision: null, // agree | disagree
+          disagreeText: ""
+        },
+        {
+          id: "3",
+          title: "接口错误码未覆盖 409 场景",
+          severity: "P2",
+          suggestions: "①补充 409 语义与重试约定；②若业务无冲突则显式排除",
+          recommend: "①",
+          section: "问题清单",
+          decision: null,
+          disagreeText: ""
+        }
+      ],
+      suspected: [
+        {
+          id: "A1",
+          title: "AI 假设「用户手机号全局唯一」",
+          suggestions: "在需求中确认是否全局唯一",
+          recommend: "—",
+          section: "疑似问题",
+          answer: ""
+        },
+        {
+          id: "A2",
+          title: "AI 在两种缓存方案中选了 A",
+          suggestions: "①维持方案 A 并写清选型理由；②改为方案 B",
+          recommend: "①",
+          section: "疑似问题",
+          answer: ""
+        }
+      ]
+    };
+
+    function renderGatePanel(s) {
+      const cCards = gateState.confirmed.map((it) => {
+        const cardCls = it.decision === "agree" ? "done-agree"
+          : it.decision === "disagree" ? "done-disagree" : "";
+        const disagreeBox = it.decision === "disagree"
+          ? `<div class="rv-extra">
+              <label>不同意意见 / 替代建议（将进入后续上下文）</label>
+              <textarea data-cid="${it.id}" oninput="onDisagreeInput('${it.id}', this.value)" placeholder="说明为何不同意，或给出你要的改法…">${escapeHtml(it.disagreeText)}</textarea>
+            </div>`
+          : "";
+        return `<div class="rv-card ${cardCls}" id="c-${it.id}">
+          <div class="rv-hd">
+            <span class="id">#${it.id}</span>
+            <span class="desc">${escapeHtml(it.title)}</span>
+            <span class="tag tag-warn">${it.severity}</span>
+          </div>
+          <div class="rv-meta">
+            建议：${escapeHtml(it.suggestions)}<br />
+            <span class="rec">推荐采用：${escapeHtml(it.recommend)}</span>
+          </div>
+          <div class="rv-actions">
+            <button type="button" class="btn btn-sm ${it.decision === "agree" ? "chip-on" : ""}" onclick="setConfirmDecision('${it.id}','agree')">同意 · 采纳推荐</button>
+            <button type="button" class="btn btn-sm ${it.decision === "disagree" ? "chip-on" : ""}" onclick="setConfirmDecision('${it.id}','disagree')">不同意</button>
+            <span class="muted">${it.decision === "agree" ? "已同意" : it.decision === "disagree" ? "已不同意" : "待表态"}</span>
+          </div>
+          ${disagreeBox}
+        </div>`;
+      }).join("");
+
+      const sCards = gateState.suspected.map((it) => {
+        const done = it.answer.trim().length > 0;
+        return `<div class="rv-card ${done ? "done-answered" : ""}" id="s-${it.id}">
+          <div class="rv-hd">
+            <span class="id">${it.id}</span>
+            <span class="desc">${escapeHtml(it.title)}</span>
+            <span class="tag tag-info">待解答</span>
+          </div>
+          <div class="rv-meta">AI 建议（参考）：${escapeHtml(it.suggestions)}</div>
+          <div class="rv-extra">
+            <label>人类解答（必填）</label>
+            <textarea data-sid="${it.id}" oninput="onSuspectAnswer('${it.id}', this.value)" placeholder="确认假设对错、选定方案、或补充信息…">${escapeHtml(it.answer)}</textarea>
+          </div>
+        </div>`;
+      }).join("");
+
+      const summary = gateProgressSummary();
+
+      return `
+        <div class="gate">
+          <h4>审批确认</h4>
+          <div class="note">
+            AI 评审输出分两类（对齐《评审模板》/《原始需求评估》）：<br />
+            <b>一类 · 确认项</b>（问题清单 / 业务风险等）：AI 已认定有问题并给出建议 → 你只需<strong>同意采纳推荐</strong>，或<strong>不同意并写出意见</strong>。<br />
+            <b>二类 · 疑似项</b>（疑似问题）：AI 不确定 → 只抛出问题，必须由人类<strong>解答</strong>。<br />
+            全部处理完后点「提交确认」：有「同意」项则进 AI 整改；仅不同意 + 疑似解答则直接下一步。顶栏「取消」才结束整条流水线。
+          </div>
+          <h5><span class="tag tag-warn">一类</span> 问题清单 / 业务风险（确认项）</h5>
+          ${cCards || "<p class='muted'>本步无确认项</p>"}
+          <h5><span class="tag tag-info">二类</span> 疑似问题（需人类解答）</h5>
+          ${sCards || "<p class='muted'>本步无疑似项</p>"}
+          <div class="gate-summary" id="gateSummary">${summary}</div>
+          <div class="gate-actions">
+            <span class="grow"></span>
+            <button type="button" class="btn btn-primary" onclick="onSubmitGate()">提交确认</button>
+          </div>
+        </div>`;
+    }
+
+    function gateProgressSummary() {
+      const cDone = gateState.confirmed.filter((x) => x.decision).length;
+      const cAgree = gateState.confirmed.filter((x) => x.decision === "agree").length;
+      const cDisagree = gateState.confirmed.filter((x) => x.decision === "disagree").length;
+      const sDone = gateState.suspected.filter((x) => x.answer.trim()).length;
+      const ready = cDone === gateState.confirmed.length
+        && gateState.confirmed.every((x) => x.decision !== "disagree" || x.disagreeText.trim())
+        && sDone === gateState.suspected.length;
+      const next = cAgree > 0 ? "提交后 → AI 整改（带入同意项的推荐建议）" : "提交后 → 无同意整改项，进入下一步";
+      return `进度：确认项 ${cDone}/${gateState.confirmed.length}（同意 ${cAgree} · 不同意 ${cDisagree}）· 疑似已答 ${sDone}/${gateState.suspected.length}`
+        + (ready ? ` · 可提交 · ${next}` : " · 尚不可提交");
+    }
+
+    function refreshGateSummary() {
+      const el = document.getElementById("gateSummary");
+      if (el) el.innerHTML = gateProgressSummary();
+    }
+
+    function setConfirmDecision(id, decision) {
+      const it = gateState.confirmed.find((x) => x.id === id);
+      if (!it) return;
+      it.decision = decision;
+      if (decision === "agree") it.disagreeText = "";
+      // 局部重绘该卡，保留其他输入
+      const s = selectedStep();
+      if (s) {
+        const box = document.getElementById("detail");
+        // 仅重绘 gate：简单整页 detail 重绘
+        renderDetail(s);
+      }
+      refreshGateSummary();
+    }
+
+    function onDisagreeInput(id, val) {
+      const it = gateState.confirmed.find((x) => x.id === id);
+      if (it) it.disagreeText = val;
+      refreshGateSummary();
+    }
+
+    function onSuspectAnswer(id, val) {
+      const it = gateState.suspected.find((x) => x.id === id);
+      if (it) it.answer = val;
+      refreshGateSummary();
+    }
+
+    function validateGate() {
+      for (const it of gateState.confirmed) {
+        if (!it.decision) return "请对所有「确认项」表态（同意或不同意）";
+        if (it.decision === "disagree" && !it.disagreeText.trim()) {
+          return "不同意项须填写不同意意见：#" + it.id;
+        }
+      }
+      for (const it of gateState.suspected) {
+        if (!it.answer.trim()) return "请解答所有「疑似问题」：" + it.id;
+      }
+      return null;
+    }
+
+    function advanceToNextBusiness(fromStep) {
+      const idx = steps.findIndex((x) => x.id === fromStep.id);
+      let next = null;
+      for (let i = idx + 1; i < steps.length; i++) {
+        if (steps[i].kind === "ai_revise") continue;
+        next = steps[i];
+        break;
+      }
+      if (next) {
+        if (isAi(next)) {
+          next.status = "WAITING_TRIGGER";
+          instanceStatus = "RUNNING";
+        } else if (next.kind === "system") {
+          next.status = "SUCCEEDED";
+          instanceStatus = "DONE";
+        } else {
+          next.status = "WAITING_HUMAN";
+          instanceStatus = "WAITING_HUMAN";
+        }
+        selectedId = next.id;
+        toast("已确认，进入：" + next.name);
+      } else {
+        instanceStatus = "DONE";
+        toast("已确认，流水线结束");
+      }
+    }
+
+    function enterRevise(fromStep) {
+      if (fromStep.round >= 3) {
+        toast("已达 max_round=3，请减少同意项或取消流水线");
+        return;
+      }
+      const idx = steps.findIndex((x) => x.id === fromStep.id);
+      const reviseId = "revise_after_" + fromStep.id + "_r" + fromStep.round;
+      let revise = steps.find((x) => x.id === reviseId);
+      if (!revise) {
+        revise = {
+          id: reviseId,
+          name: "AI 整改 · " + fromStep.name.replace(/确认|审批/g, "").trim(),
+          kind: "ai_revise",
+          status: "WAITING_TRIGGER",
+          round: fromStep.round,
+          role: "AI_PM",
+          inputs: fromStep.inputs.slice(),
+          outputs: ["prd"],
+          promptKey: "prompt_revise",
+          sessionKey: "revise_prd"
+        };
+        steps.splice(idx + 1, 0, revise);
+      } else {
+        revise.status = "WAITING_TRIGGER";
+      }
+      fromStep.status = "PENDING";
+      instanceStatus = "RUNNING";
+      selectedId = revise.id;
+      const n = gateState.confirmed.filter((x) => x.decision === "agree").length;
+      toast("提交确认 → 进入整改（同意 " + n + " 项 + 疑似解答已带入）");
+    }
+
+    function onSubmitGate() {
+      const s = selectedStep();
+      if (!s || !s.gate || s.status !== "WAITING_HUMAN") return;
+      const err = validateGate();
+      if (err) {
+        toast(err);
+        return;
+      }
+      const needRevise = gateState.confirmed.some((x) => x.decision === "agree");
+      if (needRevise) {
+        enterRevise(s);
+      } else {
+        s.status = "SUCCEEDED";
+        advanceToNextBusiness(s);
+      }
+      render();
+    }
+
+    function onRunTask(stepId, taskId) {
+      const s = steps.find((x) => x.id === stepId);
+      if (!s || !s.tasks) return;
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t) return;
+      if (!canTriggerRole(t.ownerRole)) {
+        toast("当前视角无「" + t.name + "」触发权，仅可查看");
+        return;
+      }
+      t.status = "RUNNING";
+      activeTaskId = taskId;
+      selectedId = stepId;
+      syncAiPreStatus(s);
+      instanceStatus = "RUNNING";
+      toast("已触发：" + t.name);
+      render();
+      setTimeout(() => onFinishTask(stepId, taskId), 900);
+    }
+
+    function onFinishTask(stepId, taskId) {
+      const s = steps.find((x) => x.id === stepId);
+      if (!s || !s.tasks) return;
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t || t.status === "SUCCEEDED") return;
+      t.status = "SUCCEEDED";
+      syncAiPreStatus(s);
+      if (s.status === "SUCCEEDED") {
+        const idx = steps.findIndex((x) => x.id === stepId);
+        const next = steps[idx + 1];
+        if (next) {
+          if (next.kind === "human") {
+            next.status = "WAITING_HUMAN";
+            instanceStatus = "WAITING_HUMAN";
+          } else if (isAi(next)) {
+            next.status = "WAITING_TRIGGER";
+            instanceStatus = "RUNNING";
+          }
+          selectedId = next.id;
+          toast("双 Agent 均完成 → " + next.name);
+        }
+      } else {
+        toast(t.name + " 完成，等待另一任务单元");
+        instanceStatus = "RUNNING";
+      }
+      render();
+    }
+
+    function onRunAi(id) {
+      const s = steps.find((x) => x.id === id);
+      if (!s) return;
+      s.status = "RUNNING";
+      instanceStatus = "RUNNING";
+      selectedId = id;
+      toast("AI 执行中（演示）");
+      render();
+      setTimeout(() => onFinishAi(id), 900);
+    }
+
+    function onFinishAi(id) {
+      const s = steps.find((x) => x.id === id);
+      if (!s || s.status === "SUCCEEDED") return;
+      s.status = "SUCCEEDED";
+      if (!s.outputs.length) s.outputs = ["prd"];
+
+      if (s.kind === "ai_revise") {
+        const gateId = s.id.replace(/^revise_after_/, "").replace(/_r\d+$/, "");
+        const gate = steps.find((x) => x.id === gateId);
+        if (gate) {
+          gate.round += 1;
+          gate.status = "WAITING_HUMAN";
+          reviseRound = gate.round;
+          selectedId = gate.id;
+          instanceStatus = "WAITING_HUMAN";
+          toast("整改完成 → 回到「" + gate.name + "」再审（r" + gate.round + "）");
+        }
+      } else {
+        const idx = steps.findIndex((x) => x.id === id);
+        const next = steps[idx + 1];
+        if (next) {
+          if (next.kind === "human") {
+            next.status = "WAITING_HUMAN";
+            instanceStatus = "WAITING_HUMAN";
+          } else if (isAi(next)) {
+            next.status = "WAITING_TRIGGER";
+            instanceStatus = "RUNNING";
+          }
+          selectedId = next.id;
+          toast("AI 完成 → " + next.name);
+        }
+      }
+      render();
+    }
+
+    function onCancel() {
+      if (!confirm("确认取消自动化？进行中的步骤将停止（演示）")) return;
+      instanceStatus = "CANCELLED";
+      steps.forEach((s) => {
+        if (["WAITING_HUMAN", "WAITING_TRIGGER", "RUNNING", "PENDING"].includes(s.status)) {
+          s.status = "CANCELLED";
+        }
+      });
+      toast("流水线已取消");
+      render();
+    }
+
+    seedSteps();
+    // 默认展示工作台，便于打开文件即看主场景
+    openWorkbench();
+  </script>
+</body>
+</html>

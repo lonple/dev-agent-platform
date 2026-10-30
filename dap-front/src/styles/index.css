@@ -1,0 +1,98 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--dap-font-family);
+  font-size: 14px;
+  color: var(--dap-gray-700);
+  background: var(--dap-gray-50);
+  -webkit-font-smoothing: antialiased;
+  /* 文案默认可划选复制；非输入框隐藏插入光标样式 */
+  user-select: text;
+  -webkit-user-select: text;
+  caret-color: transparent;
+}
+
+/* 交互控件：避免点选时拖出无意义选区 */
+button,
+.el-button,
+.el-button *,
+.nav-link,
+.side-link,
+.el-menu-item,
+.el-sub-menu__title,
+.el-tabs__item,
+.el-pagination,
+.el-pagination *,
+.el-tag,
+.el-switch,
+.el-checkbox,
+.el-radio,
+.el-icon,
+summary,
+[role='button'] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 表单可编辑区域：显式允许选中与光标 */
+input,
+textarea,
+select,
+[contenteditable='true'],
+.el-input__inner,
+.el-textarea__inner,
+.el-select__input,
+.el-input__wrapper input {
+  user-select: text;
+  -webkit-user-select: text;
+  caret-color: auto;
+}
+
+/* 鼠标点击后不残留焦点框；键盘导航仍用 :focus-visible */
+:where(a, button, summary, [role='button'], .nav-link, .side-link, .el-button):focus {
+  outline: none;
+}
+
+:where(a, button, summary, [role='button'], .nav-link, .side-link, .el-button):focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+a {
+  color: var(--dap-primary);
+  text-decoration: none;
+}
+
+.page-card {
+  background: var(--dap-gray-0);
+  border: 1px solid var(--dap-gray-200);
+  border-radius: var(--dap-radius-md);
+  padding: var(--dap-space-5);
+}
+
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dap-space-4);
+  margin-bottom: var(--dap-space-4);
+  flex-wrap: wrap;
+}
+
+.page-title {
+  margin: 0 0 var(--dap-space-5);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--dap-gray-900);
+}

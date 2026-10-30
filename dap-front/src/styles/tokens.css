@@ -1,0 +1,49 @@
+:root {
+  --dap-gray-0: #ffffff;
+  --dap-gray-50: #f7f8fa;
+  --dap-gray-100: #f0f2f5;
+  --dap-gray-200: #e5e7eb;
+  --dap-gray-300: #d1d5db;
+  --dap-gray-500: #8c8c8c;
+  --dap-gray-700: #4b5563;
+  --dap-gray-900: #1f2329;
+
+  --dap-primary: #2b5aed;
+  --dap-primary-hover: #1e4bd6;
+  --dap-primary-light: #eaf0ff;
+
+  --dap-warning: #d97706;
+  --dap-success: #16a34a;
+  --dap-danger: #dc2626;
+
+  --dap-font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI',
+    sans-serif;
+
+  --dap-space-1: 4px;
+  --dap-space-2: 8px;
+  --dap-space-3: 12px;
+  --dap-space-4: 16px;
+  --dap-space-5: 24px;
+  --dap-space-6: 32px;
+
+  --dap-radius-sm: 4px;
+  --dap-radius-md: 8px;
+  --dap-radius-lg: 12px;
+
+  --el-color-primary: var(--dap-primary);
+  --el-color-primary-light-3: #6b8af4;
+  --el-color-primary-light-5: #95adf7;
+  --el-color-primary-light-7: #bfd0fb;
+  --el-color-primary-light-8: #d4e0fc;
+  --el-color-primary-light-9: var(--dap-primary-light);
+  --el-color-primary-dark-2: var(--dap-primary-hover);
+  --el-color-success: var(--dap-success);
+  --el-color-warning: var(--dap-warning);
+  --el-color-danger: var(--dap-danger);
+  --el-text-color-primary: var(--dap-gray-900);
+  --el-text-color-regular: var(--dap-gray-700);
+  --el-text-color-secondary: var(--dap-gray-500);
+  --el-border-color: var(--dap-gray-200);
+  --el-border-radius-base: var(--dap-radius-sm);
+  --el-font-family: var(--dap-font-family);
+}
