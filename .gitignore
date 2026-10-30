@@ -1,0 +1,27 @@
+# Python agent secrets
+dap-agent/.env
+dap-agent/.venv/
+dap-agent/**/__pycache__/
+dap-agent/**/*.pyc
+dap-agent/.pytest_cache/
+dap-agent/.ruff_cache/
+dap-agent/dist/
+dap-agent/*.egg-info/
+
+# Workspace disk data (sibling of dap-server)
+/data/
+
+# Local / IDE
+.tmp-tools/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs & builds
+*.log
+dap-server/build/
+dap-server/.gradle/
+dap-front/dist/
+dap-front/node_modules/
