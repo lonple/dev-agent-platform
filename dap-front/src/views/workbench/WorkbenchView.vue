@@ -839,6 +839,7 @@ watch(
 onMounted(() => {
   void bootstrap()
 })
+async function refreshAllTasks() { await Promise.all([refreshList(), refreshIssues()]) }
 </script>
 
 <template>
@@ -858,7 +859,7 @@ onMounted(() => {
                 ? refreshIssues()
                 : taskSection === 'req'
                   ? refreshList()
-                  : Promise.all([refreshList(), refreshIssues()])
+                  : refreshAllTasks()
             "
           />
         </div>

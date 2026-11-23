@@ -79,7 +79,7 @@ const router = createRouter({
           path: 'tenant-config/positions',
           name: 'tenant-config-positions',
           component: () => import('../views/sys-config/PositionsView.vue'),
-          meta: { permission: 'position:view', requiresTenant: true },
+          meta: { anyPermissions: ['position:view', 'prompt:view'], requiresTenant: true },
         },
         {
           path: 'tenant-config/products',
@@ -165,6 +165,10 @@ router.beforeEach(async (to) => {
 
   const permission = to.meta.permission as string | undefined
   if (permission && !auth.hasPermission(permission)) {
+    return { path: '/home' }
+  }
+  const anyPermissions = to.meta.anyPermissions as string[] | undefined
+  if (anyPermissions?.length && !auth.hasAnyPermission(anyPermissions)) {
     return { path: '/home' }
   }
 

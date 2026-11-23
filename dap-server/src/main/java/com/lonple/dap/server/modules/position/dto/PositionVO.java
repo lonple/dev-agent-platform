@@ -10,6 +10,7 @@ public class PositionVO {
 
     private Long id;
     private String code;
+    private boolean builtin;
     private String name;
     private String description;
     private LocalDateTime createdAt;

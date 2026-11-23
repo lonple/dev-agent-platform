@@ -26,6 +26,22 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PositionService {
 
+    private static final Map<String, String> BUILTIN_POSITIONS = Map.of(
+            "PM", "产品经理", "ARCH", "架构师", "DEV", "研发", "QA", "测试", "UI", "UI设计师");
+
+    private boolean isBuiltin(String code) {
+        return code != null && BUILTIN_POSITIONS.containsKey(code.trim().toUpperCase(java.util.Locale.ROOT));
+    }
+
+    /** 仅补齐缺失的执行岗位，不覆盖现有名称、描述和关联数据。 */
+    @Transactional
+    public List<PositionVO> ensureBuiltins() {
+        for (String code : List.of("PM", "ARCH", "DEV", "QA", "UI")) {
+            ensureBuiltin(code, BUILTIN_POSITIONS.get(code));
+        }
+        return list(false);
+    }
+
     private final PositionMapper positionMapper;
     private final PositionSkillMapper skillMapper;
 
@@ -81,8 +97,14 @@ public class PositionService {
     @Transactional
     public void update(Long id, PositionSaveRequest req) {
         SysPosition position = requireOwned(id);
-        assertNameUnique(position.getTenantId(), req.getName(), id);
         String code = normalizeCode(req.getCode());
+        if (isBuiltin(position.getCode()) && !Objects.equals(normalizeCode(position.getCode()), code)) {
+            throw new BizException("内置 Agent 岗位编码不可修改");
+        }
+        if (!isBuiltin(position.getCode()) && isBuiltin(code)) {
+            throw new BizException("不能将自定义岗位改为内置 Agent 岗位，请使用补齐内置岗位");
+        }
+        assertNameUnique(position.getTenantId(), req.getName(), id);
         assertCodeUnique(position.getTenantId(), code, id);
         position.setCode(code);
         position.setName(req.getName().trim());
@@ -126,7 +148,10 @@ public class PositionService {
 
     @Transactional
     public void delete(Long id) {
-        requireOwned(id);
+        SysPosition position = requireOwned(id);
+        if (isBuiltin(position.getCode())) {
+            throw new BizException("内置 Agent 岗位被流水线使用，不可删除");
+        }
         skillMapper.delete(new LambdaQueryWrapper<SysPositionSkill>()
                 .eq(SysPositionSkill::getPositionId, id));
         positionMapper.deleteById(id);
@@ -249,6 +274,7 @@ public class PositionService {
     private PositionVO toVO(SysPosition position, List<SysPositionSkill> skills) {
         PositionVO vo = new PositionVO();
         vo.setId(position.getId());
+        vo.setBuiltin(isBuiltin(position.getCode()));
         vo.setCode(position.getCode());
         vo.setName(position.getName());
         vo.setDescription(position.getDescription());

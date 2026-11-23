@@ -53,6 +53,13 @@ const isIssuePipe = computed(() => issueId.value > 0)
 const loading = ref(false)
 const actionLoading = ref(false)
 const instance = ref<PipelineInstance | null>(null)
+const progress = computed(() => {
+  const nodes = (instance.value?.nodes || []).filter(n => n.enabledFlag !== false && n.status !== 'SKIPPED')
+  const completed = nodes.filter(n => n.status === 'SUCCEEDED').length
+  const waiting = nodes.flatMap(n => n.units || []).filter(u => ['WAITING_CONFIRM', 'WAITING_PUBLISH'].includes(u.status)).length
+  const running = nodes.flatMap(n => n.units || []).filter(u => u.status === 'RUNNING').length
+  return { completed, total: nodes.length, percent: nodes.length ? Math.round(completed / nodes.length * 100) : 0, waiting, running }
+})
 const selectedNodeId = ref<number | null>(null)
 const activeUnitId = ref<number | null>(null)
 const expandedConfirmUnitId = ref<number | null>(null)
@@ -1108,6 +1115,13 @@ onUnmounted(stopPoll)
       </div>
     </header>
 
+    <div v-if="instance" class="execution-overview">
+      <div class="progress-copy"><span class="overview-label">流程进度</span><strong>{{ progress.completed }}<small> / {{ progress.total }} 个节点</small></strong></div>
+      <div class="progress-track" role="progressbar" :aria-valuenow="progress.percent" aria-valuemin="0" aria-valuemax="100" aria-label="流程节点完成进度"><span :style="{ width: progress.percent + '%' }" /></div>
+      <span class="overview-percent">{{ progress.percent }}%</span>
+      <div class="overview-stat"><i class="activity-dot" />{{ progress.running }} 个任务运行中</div>
+      <div class="overview-stat" :class="{ 'needs-attention': progress.waiting > 0 }">{{ progress.waiting }} 项待确认 / 发布</div>
+    </div>
     <div v-if="instance" class="summary">
       <template v-for="(b, i) in summaryBits" :key="b.label">
         <span v-if="i > 0" class="sep">|</span>
@@ -1128,7 +1142,7 @@ onUnmounted(stopPoll)
       :class="{ 'ai-open': aiOpen && isAiNode }"
     >
       <section class="col col-flow">
-        <div class="col-hd">任务流程</div>
+        <div class="col-hd"><span>流程导航</span><span class="muted">{{ instance.nodes.length }} 个节点</span></div>
         <div class="col-bd">
           <button
             v-for="n in instance.nodes"
@@ -1704,24 +1718,8 @@ onUnmounted(stopPoll)
 
 <style scoped>
 .wb {
-  --dap-gray-0: #ffffff;
-  --dap-gray-50: #f7f8fa;
-  --dap-gray-100: #f0f2f5;
-  --dap-gray-200: #e5e7eb;
-  --dap-gray-300: #d1d5db;
-  --dap-gray-500: #8c8c8c;
-  --dap-gray-700: #4b5563;
-  --dap-gray-900: #1f2329;
-  --dap-primary: #2b5aed;
-  --dap-primary-hover: #1e4bd6;
-  --dap-primary-light: #eaf0ff;
-  --dap-warning: #d97706;
   --dap-warning-bg: #fef3e2;
-  --dap-success: #16a34a;
   --dap-success-bg: #e8f7ee;
-  --dap-danger: #dc2626;
-  --dap-radius-sm: 4px;
-  --dap-radius-md: 8px;
 
   height: 100%;
   min-height: 0;
@@ -2495,4 +2493,41 @@ onUnmounted(stopPoll)
     border-top: 1px solid var(--dap-gray-200);
   }
 }
+/* 工作台视觉层级 */
+.wb-top { min-height:76px; height:auto; padding:18px 24px; flex-wrap:wrap; }
+.wb-top .title { font-size:18px; gap:12px; flex:1; overflow-wrap:anywhere; }
+.wb-top .title .code { font-family:Consolas,monospace; font-size:11px; padding:4px 7px; background:var(--dap-gray-100); border-radius:4px; }
+.wb-top .metrics { display:none; }
+.execution-overview { display:flex; align-items:center; flex-wrap:wrap; gap:18px; padding:18px 24px; background:white; border-bottom:1px solid var(--dap-gray-200); }
+.progress-copy { display:flex; align-items:center; gap:14px; }
+.overview-label { color:var(--dap-gray-500); font-size:12px; }
+.progress-copy strong { color:var(--dap-gray-900); font-size:18px; font-weight:600; }
+.progress-copy small { font-size:11px; color:var(--dap-gray-500); font-weight:400; }
+.progress-track { height:5px; width:clamp(60px,12vw,180px); border-radius:4px; background:var(--dap-gray-100); overflow:hidden; }
+.progress-track > span { display:block; height:100%; background:var(--dap-primary); border-radius:4px; transition:width .25s; }
+.overview-percent { color:var(--dap-gray-500); font-size:11px; font-family:Consolas,monospace; }
+.overview-stat { font-size:12px; color:var(--dap-gray-500); display:flex; align-items:center; gap:7px; }
+.activity-dot { width:6px; height:6px; border-radius:50%; background:var(--dap-primary); }
+.needs-attention { color:var(--dap-warning); }
+.summary { padding:10px 24px; background:var(--dap-gray-50); font-size:11px; }
+.wb-main { grid-template-columns:224px minmax(0,1fr); }
+.wb-main.ai-open { grid-template-columns:210px minmax(0,1fr) 320px; }
+.col-flow { background:#fafbfd; }
+.col-hd { min-height:46px; padding:0 18px; font-size:12px; color:var(--dap-gray-700); }
+.col-flow .col-bd { padding:12px 10px; }
+.step { border-left:0; border-radius:6px; padding:11px 10px; margin-bottom:4px; gap:10px; }
+.step.current { box-shadow:inset 2px 0 var(--dap-primary); }
+.step .ico { border:1px solid var(--dap-gray-200); border-radius:50%; width:20px; height:20px; font-size:10px; line-height:18px; background:white; }
+.step.current .ico { color:white; background:var(--dap-primary); border-color:var(--dap-primary); }
+.step .name { font-size:12px; line-height:20px; }
+.step .meta { font-size:11px; margin-top:3px; }
+.col-detail .col-bd { padding:24px; }
+.detail-title { font-size:20px; margin-bottom:24px; gap:10px; }
+.tag { border-radius:4px; font-size:11px; }
+.btn { min-height:30px; border-radius:6px; transition:background .15s,border-color .15s; }
+.btn:focus-visible,.step:focus-visible { outline:2px solid var(--dap-primary); outline-offset:2px; }
+.gate { border-radius:8px; }
+@media(max-width:1250px) and (min-width:1101px) { .wb-main.ai-open { grid-template-columns:180px minmax(0,1fr) 260px; } }
+@media(max-width:1100px) { .wb-main,.wb-main.ai-open { grid-template-columns:minmax(0,1fr); grid-template-rows:130px minmax(0,1fr) auto; } .col-flow { max-height:130px; } .col-flow .col-bd { display:flex; gap:6px; overflow:auto; padding:8px; } .step { min-width:150px; width:150px; margin:0; align-self:stretch; } .col-flow .col-hd { min-height:34px; height:34px; } .col-detail .col-bd { padding:20px; } }
+@media(max-width:680px) { .wb-top { padding:14px; gap:10px; } .wb-top .title { font-size:15px; flex-wrap:wrap; } .execution-overview { gap:12px; padding:14px; } .overview-stat { font-size:11px; } .summary { padding-inline:14px; } .detail-title { font-size:17px; } .col-detail .col-bd { padding:14px; } }
 </style>

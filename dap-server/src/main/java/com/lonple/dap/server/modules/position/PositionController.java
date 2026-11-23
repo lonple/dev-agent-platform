@@ -36,6 +36,12 @@ public class PositionController {
         return ApiResponse.ok(positionService.get(id));
     }
 
+    @PostMapping("/ensure-builtin")
+    @RequirePermission("position:operate")
+    public ApiResponse<List<PositionVO>> ensureBuiltins() {
+        return ApiResponse.ok(positionService.ensureBuiltins());
+    }
+
     @PostMapping
     @RequirePermission("position:operate")
     public ApiResponse<Map<String, Long>> create(@Valid @RequestBody PositionSaveRequest request) {
@@ -65,6 +71,7 @@ public class PositionController {
     private void assertCanViewPositions() {
         LoginUser user = UserContext.require();
         if (!user.getPermissions().contains("position:view")
+                && !user.getPermissions().contains("prompt:view")
                 && !user.getPermissions().contains("work:access")) {
             throw new BizException(403, "无权限查看岗位");
         }

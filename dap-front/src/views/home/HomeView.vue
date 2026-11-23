@@ -14,6 +14,11 @@ const needPickTenant = computed(
 )
 
 const noTenant = computed(() => !loading.value && tenants.value.length === 0)
+const entries = computed(() => [
+  { title: '需求管理', description: '从业务目标出发，推进每一次交付。', path: '/requirement/apply', permission: 'requirement:view', mark: '01', action: '查看需求' },
+  { title: '问题追踪', description: '跟进问题分析、修复与验证。', path: '/issues', permission: 'issue:view', mark: '02', action: '查看问题' },
+  { title: '研发工作台', description: '处理研发任务，查看材料与执行进展。', path: '/workbench', permission: 'work:access', mark: '03', action: '进入工作台' },
+].filter(item => auth.currentTenantId != null && auth.hasPermission(item.permission)))
 
 async function loadAndResolveTenant() {
   loading.value = true
@@ -63,8 +68,20 @@ onMounted(() => {
 </script>
 
 <template>
-  <div v-loading="loading" class="page-card home-page">
-    <h1 class="page-title">欢迎，{{ auth.user?.username ?? '用户' }}</h1>
+  <div v-loading="loading" class="home-page">
+    <div class="home-heading">
+      <span class="eyebrow">WORKSPACE / OVERVIEW</span>
+      <h1>工作总览<span class="heading-dot">.</span></h1>
+      <p>你好，{{ auth.user?.username ?? '用户' }}。从这里开始今天的研发工作。</p>
+    </div>
+    <div v-if="entries.length" class="entry-grid">
+      <router-link v-for="entry in entries" :key="entry.path" :to="entry.path" class="entry-card">
+        <span class="entry-mark">{{ entry.mark }}</span><h2>{{ entry.title }}</h2>
+        <p>{{ entry.description }}</p><span class="entry-action">{{ entry.action }} <span>↗</span></span>
+      </router-link>
+    </div>
+    <section class="workspace-panel">
+    <div class="panel-heading"><h2>工作空间</h2><span>组织与协作范围</span></div>
 
     <template v-if="noTenant">
       <p class="hint">您尚未加入任何租户。可在用户中心的租户管理中添加成员后，再回到首页进入。</p>
@@ -95,7 +112,7 @@ onMounted(() => {
         <span v-else class="muted">未选择租户</span>
       </p>
       <p class="hint">
-        可从顶部导航进入用户中心；也可随时在右上角租户下拉中切换。
+        从左侧导航进入业务模块；可在右上角切换工作空间。
       </p>
       <div v-if="tenants.length > 1" class="switch-hint">
         <p class="section-desc">切换进入其他租户：</p>
@@ -114,13 +131,32 @@ onMounted(() => {
         </div>
       </div>
     </template>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .home-page {
-  max-width: 720px;
+  max-width: 1180px;
+  margin: 20px auto;
 }
+.home-heading { margin-bottom: 36px; }
+.eyebrow { font-size: 10px; letter-spacing: 2px; color: var(--dap-gray-500); }
+.home-heading h1 { font-size: 30px; color: var(--dap-gray-900); letter-spacing: -1px; margin: 12px 0; font-weight: 600; }
+.heading-dot { color: var(--dap-primary); }
+.home-heading p { color: var(--dap-gray-500); font-size: 13px; }
+.entry-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-bottom: 32px; }
+.entry-card { display: flex; flex-direction: column; padding: 26px; border: 1px solid var(--dap-gray-200); border-radius: 10px; background: white; color: var(--dap-gray-900); transition: border-color .15s, transform .15s; }
+.entry-card:hover { border-color: var(--dap-primary); transform: translateY(-2px); }
+.entry-mark { color: var(--dap-gray-500); font-family: monospace; font-size: 12px; }
+.entry-card h2 { margin: 28px 0 8px; font-size: 18px; font-weight: 600; }
+.entry-card p { color: var(--dap-gray-500); font-size: 12px; line-height: 1.8; margin: 0 0 32px; }
+.entry-action { margin-top: auto; display:flex; justify-content:space-between; font-size:12px; color:var(--dap-primary); }
+.workspace-panel { background:white; border:1px solid var(--dap-gray-200); border-radius:10px; padding:24px; }
+.panel-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+.panel-heading h2 { margin:0; font-size:14px; color:var(--dap-gray-900); font-weight:600; }
+.panel-heading > span { font-size:11px; color:var(--dap-gray-500); }
+@media(max-width:900px) { .entry-grid { grid-template-columns:1fr; gap:12px; } .entry-card { padding:20px; } .entry-card h2 { margin-top:12px; } .entry-card p { margin-bottom:16px; } .home-page { margin-top:0; } }
 
 .section-desc {
   margin: 0 0 var(--dap-space-4);

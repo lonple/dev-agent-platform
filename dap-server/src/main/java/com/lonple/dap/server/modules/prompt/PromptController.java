@@ -63,7 +63,7 @@ public class PromptController {
 
     /**
      * 初始化流水线默认提示词。
-     * 一般任务：已配置则跳过；AI 初审（REVIEW_PRE / REVIEW_PRE_TECH）会覆盖更新正文。
+     * 所有任务已配置则跳过，不覆盖租户维护的正文。
      */
     @PostMapping("/ensure-pre-review")
     @RequirePermission("prompt:operate")

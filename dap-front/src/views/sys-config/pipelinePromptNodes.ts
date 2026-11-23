@@ -11,6 +11,12 @@ export interface PipelinePromptNode {
   slots: PipelinePromptSlot[]
 }
 
+export type PipelinePromptGroupId = 'requirement' | 'issue'
+
+export function promptGroupForTask(taskTypeCode: string): PipelinePromptGroupId {
+  return taskTypeCode.toUpperCase().startsWith('GEN_ISSUE_') ? 'issue' : 'requirement'
+}
+
 export const PIPELINE_PROMPT_NODES: PipelinePromptNode[] = [
   {
     id: 'ai_pre',
@@ -146,3 +152,8 @@ export const PIPELINE_PROMPT_NODES: PipelinePromptNode[] = [
 export const ALL_PIPELINE_TASK_CODES = Array.from(
   new Set(PIPELINE_PROMPT_NODES.flatMap((n) => n.slots.map((s) => s.taskTypeCode))),
 )
+
+export const PIPELINE_PROMPT_GROUPS = [
+  { id: 'requirement' as const, name: '开发需求', description: '需求评估、设计、开发与测试', nodes: PIPELINE_PROMPT_NODES.filter(n => n.slots.every(s => promptGroupForTask(s.taskTypeCode) === 'requirement')) },
+  { id: 'issue' as const, name: '问题修复', description: '问题分析、修复、评审与回归', nodes: PIPELINE_PROMPT_NODES.filter(n => n.slots.every(s => promptGroupForTask(s.taskTypeCode) === 'issue')) },
+]

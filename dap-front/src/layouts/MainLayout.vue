@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, House, Document, Warning, Monitor, DataAnalysis, Setting, User, Menu, Close } from '@element-plus/icons-vue'
 import { logout } from '../api/auth'
 import { useAuthStore } from '../stores/auth'
 import TenantSwitcher from '../components/TenantSwitcher.vue'
 
+const sidebarOpen = ref(false)
+const menuIcons = [House, Document, Warning, Monitor, DataAnalysis, Setting, User]
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -23,10 +25,10 @@ const userCenterMenus = [
 ]
 
 const tenantConfigMenus = [
-  { label: '用户管理', path: '/tenant-config/users', permission: 'tenant-user:view' },
-  { label: '岗位管理', path: '/tenant-config/positions', permission: 'position:view' },
-  { label: '产品管理', path: '/tenant-config/products', permission: 'product:view' },
-  { label: '提示词管理', path: '/tenant-config/prompts', permission: 'prompt:view' },
+  { label: '用户管理', path: '/tenant-config/users', permissions: ['tenant-user:view'] },
+  { label: 'Agent 岗位', path: '/tenant-config/positions', permissions: ['position:view', 'prompt:view'] },
+  { label: '提示词管理', path: '/tenant-config/prompts', permissions: ['prompt:view'] },
+  { label: '产品管理', path: '/tenant-config/products', permissions: ['product:view'] },
 ]
 
 const auditMenus = [
@@ -39,7 +41,7 @@ const requirementMenus = [
 ]
 
 const userCenterPermissions = userCenterMenus.map((m) => m.permission)
-const tenantConfigPermissions = tenantConfigMenus.map((m) => m.permission)
+const tenantConfigPermissions = tenantConfigMenus.flatMap((m) => m.permissions)
 const auditPermissions = auditMenus.map((m) => m.permission)
 
 const topMenus = computed(() => {
@@ -99,7 +101,7 @@ const visibleSideMenus = computed(() => {
     return auditMenus.filter((m) => auth.hasPermission(m.permission))
   }
   if (showTenantConfigSide.value) {
-    return tenantConfigMenus.filter((m) => auth.hasPermission(m.permission))
+    return tenantConfigMenus.filter((m) => auth.hasAnyPermission(m.permissions))
   }
   if (showRequirementSide.value) {
     return requirementMenus.filter((m) => auth.hasPermission(m.permission))
@@ -113,7 +115,7 @@ const visibleSideMenus = computed(() => {
 const showSide = computed(() => visibleSideMenus.value.length > 0)
 
 function isActive(path: string) {
-  return route.path === path || route.path.startsWith(`${path}/`)
+  return route.path === path || route.path.startsWith(`${path}/`) || (path === '/workbench' && route.path.includes('/pipeline'))
 }
 
 async function handleLogout() {
@@ -150,7 +152,7 @@ function navigateTop(path: string) {
     return
   }
   if (path.startsWith('/tenant-config')) {
-    const first = tenantConfigMenus.filter((m) => auth.hasPermission(m.permission))[0]
+    const first = tenantConfigMenus.filter((m) => auth.hasAnyPermission(m.permissions))[0]
     if (first) {
       router.push(first.path)
       return
@@ -178,203 +180,88 @@ function navigateTop(path: string) {
   }
   router.push(path)
 }
+const currentSection = computed(() => topMenus.value.find(m => isActive(m.path) || (m.path.startsWith('/audit') && showAuditSide.value) || (m.path.startsWith('/tenant-config') && showTenantConfigSide.value) || (m.path.startsWith('/user-center') && showUserCenterSide.value))?.label || '研发工作台')
+const activeMenuPath = computed(() => route.path)
 </script>
 
 <template>
-  <div class="main-layout">
-    <header class="top-bar">
-      <div class="top-left">
-        <div class="brand">
-          <span class="logo-square">D</span>
-          <span class="brand-text">DAP</span>
-        </div>
-        <nav class="top-nav">
-          <button
-            v-for="item in topMenus"
-            :key="item.path"
-            type="button"
-            class="nav-link"
-            :class="{ active: isActive(item.path) }"
-            @click="navigateTop(item.path)"
-          >
-            {{ item.label }}
+  <div class="main-layout" @keyup.esc="sidebarOpen = false">
+    <button v-if="sidebarOpen" class="nav-backdrop" aria-label="关闭导航" @click="sidebarOpen = false" />
+    <aside class="app-sidebar" :class="{ 'is-open': sidebarOpen }">
+      <router-link to="/home" class="brand" @click="sidebarOpen = false">
+        <span class="logo-square">D</span>
+        <span><strong>DAP</strong><small>研发协作平台</small></span>
+      </router-link>
+      <div class="workspace-label">工作空间</div>
+      <nav class="app-nav" aria-label="主导航">
+        <template v-for="(item, index) in topMenus" :key="item.path">
+          <div v-if="['运维中心', '租户配置', '用户中心'].includes(item.label) && !['运维中心', '租户配置', '用户中心'].includes(topMenus[index - 1]?.label || '')" class="workspace-label management-label">管理与设置</div>
+          <button class="nav-link" :class="{ active: currentSection === item.label }" :aria-current="currentSection === item.label ? 'page' : undefined" @click="navigateTop(item.path); sidebarOpen = false">
+            <el-icon><component :is="menuIcons[['首页','需求管理','问题单管理','工作台','运维中心','租户配置','用户中心'].indexOf(item.label)] || Document" /></el-icon>
+            <span>{{ item.label === '首页' ? '工作总览' : item.label === '工作台' ? '研发工作台' : item.label }}</span>
           </button>
-        </nav>
-      </div>
-      <div class="top-right">
-        <TenantSwitcher />
-        <el-dropdown trigger="click" @command="onUserCommand">
-          <span class="user-trigger">
-            {{ auth.user?.username ?? '用户' }}
-            <el-icon><ArrowDown /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="logout">登出</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
-    </header>
-
-    <div class="body">
-      <aside v-if="showSide" class="side-menu">
-        <router-link
-          v-for="item in visibleSideMenus"
-          :key="item.path"
-          :to="item.path"
-          class="side-link"
-          :class="{ active: route.path === item.path }"
-        >
-          {{ item.label }}
-        </router-link>
-      </aside>
-      <main
-        class="content"
-        :class="{
-          'with-side': showSide,
-          'flush':
-            route.path.startsWith('/workbench') || route.path.includes('/pipeline'),
-        }"
-      >
-        <router-view />
-      </main>
+          <div v-if="currentSection === item.label && showSide && visibleSideMenus.length > 1" class="sub-nav">
+            <router-link v-for="child in visibleSideMenus" :key="child.path" :to="child.path" :class="{ selected: activeMenuPath === child.path }" @click="sidebarOpen = false">{{ child.label }}</router-link>
+          </div>
+        </template>
+      </nav>
+      <div class="sidebar-footer"><span class="workspace-dot" />{{ auth.currentTenantName || '请选择工作空间' }}<span class="footer-caption">DAP WORKSPACE</span></div>
+    </aside>
+    <div class="app-shell">
+      <header class="top-bar">
+        <div class="breadcrumb">
+          <button class="mobile-toggle" :aria-label="sidebarOpen ? '关闭导航' : '打开导航'" @click="sidebarOpen = !sidebarOpen"><el-icon><component :is="sidebarOpen ? Close : Menu" /></el-icon></button>
+          <span class="breadcrumb-root">研发中心</span><span class="breadcrumb-divider">/</span><span>{{ currentSection === '首页' ? '工作总览' : currentSection }}</span>
+          <template v-if="visibleSideMenus.length > 1"><span class="breadcrumb-divider">/</span><span class="breadcrumb-root">{{ visibleSideMenus.find(m => m.path === activeMenuPath)?.label }}</span></template>
+        </div>
+        <div class="top-right">
+          <TenantSwitcher />
+          <span class="header-divider" />
+          <el-dropdown trigger="click" @command="onUserCommand">
+            <button class="user-trigger"><span class="avatar">{{ (auth.user?.username || 'U').slice(0, 1).toUpperCase() }}</span><span class="username">{{ auth.user?.username ?? '用户' }}</span><el-icon><ArrowDown /></el-icon></button>
+            <template #dropdown><el-dropdown-menu><el-dropdown-item command="logout">退出登录</el-dropdown-item></el-dropdown-menu></template>
+          </el-dropdown>
+        </div>
+      </header>
+      <main class="content" :class="{ flush: route.path.startsWith('/workbench') || route.path.includes('/pipeline') }"><router-view /></main>
     </div>
   </div>
 </template>
 
 <style scoped>
-.main-layout {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--dap-gray-50);
-}
-
-.top-bar {
-  height: 56px;
-  padding: 0 var(--dap-space-5);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--dap-gray-0);
-  border-bottom: 1px solid var(--dap-gray-200);
-}
-
-.top-left {
-  display: flex;
-  align-items: center;
-  gap: var(--dap-space-6);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: var(--dap-space-2);
-}
-
-.logo-square {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--dap-primary);
-  color: var(--dap-gray-0);
-  font-weight: 600;
-  border-radius: var(--dap-radius-sm);
-}
-
-.brand-text {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--dap-gray-900);
-}
-
-.top-nav {
-  display: flex;
-  gap: var(--dap-space-2);
-}
-
-.nav-link {
-  border: none;
-  background: transparent;
-  padding: var(--dap-space-2) var(--dap-space-3);
-  font: inherit;
-  color: var(--dap-gray-700);
-  cursor: pointer;
-  border-radius: var(--dap-radius-sm);
-}
-
-.nav-link:hover {
-  background: var(--dap-gray-100);
-}
-
-.nav-link.active {
-  color: var(--dap-primary);
-  background: var(--dap-primary-light);
-}
-
-.top-right {
-  display: flex;
-  align-items: center;
-  gap: var(--dap-space-4);
-}
-
-.user-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--dap-space-1);
-  cursor: pointer;
-  color: var(--dap-gray-900);
-}
-
-.body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-.side-menu {
-  width: 200px;
-  flex-shrink: 0;
-  padding: var(--dap-space-4);
-  background: var(--dap-gray-0);
-  border-right: 1px solid var(--dap-gray-200);
-  display: flex;
-  flex-direction: column;
-  gap: var(--dap-space-1);
-}
-
-.side-link {
-  display: block;
-  padding: var(--dap-space-3) var(--dap-space-4);
-  border-radius: var(--dap-radius-sm);
-  color: var(--dap-gray-700);
-}
-
-.side-link:hover {
-  background: var(--dap-gray-50);
-}
-
-.side-link.active {
-  color: var(--dap-primary);
-  background: var(--dap-primary-light);
-  font-weight: 500;
-}
-
-.content {
-  flex: 1;
-  padding: var(--dap-space-5);
-  overflow: auto;
-}
-
-.content.with-side {
-  padding: var(--dap-space-5);
-}
-
-.content.flush {
-  padding: 0;
-  overflow: hidden;
-}
+.main-layout { display:flex; height:100dvh; overflow:hidden; background:var(--dap-gray-50); }
+.app-sidebar { width:216px; flex-shrink:0; display:flex; flex-direction:column; padding:26px 14px 16px; background:#f8fafc; border-right:1px solid var(--dap-gray-200); overflow:auto; }
+.brand { display:flex; align-items:center; gap:11px; padding:0 10px 30px; color:var(--dap-gray-900); }
+.logo-square { display:grid; place-items:center; width:34px; height:36px; border-radius:10px; background:var(--dap-gray-900); color:white; font-size:22px; font-weight:700; }
+.brand strong { display:block; font-size:18px; letter-spacing:1px; line-height:1.3; }
+.brand small { display:block; margin-top:3px; color:var(--dap-gray-500); font-size:11px; }
+.workspace-label { padding:0 12px 10px; color:var(--dap-gray-500); font-size:11px; font-weight:500; letter-spacing:1px; }
+.management-label { margin-top:28px; }
+.app-nav { display:flex; flex-direction:column; gap:5px; }
+.nav-link { display:flex; align-items:center; gap:12px; width:100%; padding:11px 13px; border:0; border-radius:7px; background:transparent; color:var(--dap-gray-700); font:inherit; font-size:13px; cursor:pointer; text-align:left; transition:background .15s; }
+.nav-link .el-icon { font-size:17px; color:#8590a2; }
+.nav-link:hover { background:#edf1f6; }
+.nav-link.active { background:var(--dap-primary-light); color:var(--dap-primary); font-weight:600; }
+.nav-link.active .el-icon { color:var(--dap-primary); }
+.sub-nav { display:flex; flex-direction:column; gap:3px; margin:1px 0 8px 33px; border-left:1px solid var(--dap-gray-200); padding-left:10px; }
+.sub-nav a { padding:7px 10px; font-size:12px; color:var(--dap-gray-500); border-radius:5px; }
+.sub-nav a:hover,.sub-nav a.selected { color:var(--dap-primary); background:var(--dap-primary-light); }
+.sidebar-footer { margin-top:auto; padding:24px 12px 0; color:var(--dap-gray-700); font-size:12px; }
+.workspace-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--dap-primary); margin-right:8px; }
+.footer-caption { display:block; margin-top:9px; font-size:9px; letter-spacing:1.5px; color:var(--dap-gray-500); }
+.app-shell { flex:1; min-width:0; display:flex; flex-direction:column; }
+.top-bar { height:56px; flex-shrink:0; padding:0 28px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--dap-gray-200); background:white; gap:12px; }
+.breadcrumb { display:flex; align-items:center; gap:12px; font-size:12px; min-width:0; }
+.breadcrumb-root { color:var(--dap-gray-500); }
+.breadcrumb-divider { color:var(--dap-gray-300); }
+.top-right { display:flex; align-items:center; gap:16px; flex-shrink:0; }
+.header-divider { height:20px; border-left:1px solid var(--dap-gray-200); }
+.user-trigger { display:flex; align-items:center; gap:9px; border:0; background:none; font:inherit; font-size:12px; cursor:pointer; color:var(--dap-gray-700); }
+.avatar { display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:#edf0f5; color:#56637b; font-size:11px; font-weight:600; }
+.content { flex:1; min-height:0; padding:28px; overflow:auto; }
+.content.flush { padding:0; overflow:hidden; }
+.mobile-toggle { display:none; border:0; background:none; cursor:pointer; }
+.nav-backdrop { display:none; }
+@media(max-width:900px) { .app-sidebar { width:184px; padding-inline:8px; } .top-bar { padding-inline:18px; } .content { padding:20px; } .breadcrumb-root:first-of-type,.breadcrumb-divider:first-of-type { display:none; } }
+@media(max-width:680px) { .app-sidebar { position:fixed; inset:0 auto 0 0; z-index:101; width:216px; transform:translateX(-100%); transition:transform .2s; } .app-sidebar.is-open { transform:translateX(0); } .nav-backdrop { display:block; position:fixed; inset:0; z-index:100; border:0; background:#17223566; } .mobile-toggle { display:block; } .username,.header-divider { display:none; } .top-bar { padding-inline:12px; } .top-right { gap:6px; } .breadcrumb { gap:7px; } .content { padding:16px; } }
 </style>

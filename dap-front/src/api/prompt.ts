@@ -55,7 +55,7 @@ export interface EnsurePreReviewResult {
   missingPositions: string[]
 }
 
-/** 初始化流水线默认提示词；AI 初审两岗会覆盖更新正文 */
+/** 补齐流水线默认提示词；已存在的绑定全部跳过，不覆盖正文。 */
 export function ensurePreReviewPrompts() {
   return request.post<any, EnsurePreReviewResult>('/prompts/ensure-pre-review')
 }

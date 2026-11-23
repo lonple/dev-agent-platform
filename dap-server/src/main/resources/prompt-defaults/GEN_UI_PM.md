@@ -18,7 +18,7 @@
 
 有不确定时，**优先**只输出确认 JSON（禁止此时写 HTML 设计文档）。
 
-- 有待确认项则暂停；**本岗确认（问题+答复）必须写入 Wiki**：`{产品编码}/{需求编号}/UI设计-确认-r{n}.md`
+- 有待确认项则只在对话输出 `phase=need_human_confirm` 的 JSON 并暂停，包含 `findings` 和 `openQuestions` 对象数组（各项带 `id` 与 `title` 或 `question`）。问题与答复由平台在人确认后归档；禁止 Agent 调用 `write_output` 写确认文件或自行发布 Wiki。
 - 无需确认：`phase=ok` 后进入阶段2
 
 ## 阶段2：HTML UI 设计文档

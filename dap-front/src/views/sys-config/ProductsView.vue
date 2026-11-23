@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
@@ -33,6 +33,7 @@ import {
 import { listWikiTree, type WikiNodeItem } from '../../api/wiki'
 import { useAuthStore } from '../../stores/auth'
 import { formatDateTime } from '../../utils/date'
+import { readRuntimeProfile, writeRuntimeProfile } from '../../utils/runtimeProfile'
 
 const VERSION_STATUS_OPTIONS: { value: ProductVersionStatus; label: string }[] = [
   { value: 'PLANNING', label: '计划中' },
@@ -59,12 +60,20 @@ const selected = computed(
 )
 
 const sandboxLoading = ref(false)
+const sandboxError = ref('')
+const sandboxInitializing = ref(false)
+const sandboxDetails = ref<string[]>([])
+let sandboxRequest = 0
 const sandboxResources = ref<SandboxResource[]>([])
 const sandboxProfiles = ref<SandboxProfile[]>([])
 const sandboxLeases = ref<any[]>([])
 
 async function loadSandbox() {
+  const requestId = ++sandboxRequest
+  const productId = selectedId.value
+  sandboxError.value = ''
   if (!selectedId.value) {
+    sandboxLoading.value = false
     sandboxResources.value = []
     sandboxProfiles.value = []
     sandboxLeases.value = []
@@ -72,29 +81,36 @@ async function loadSandbox() {
   }
   sandboxLoading.value = true
   try {
-    ;[sandboxResources.value, sandboxProfiles.value, sandboxLeases.value] = await Promise.all([
-      listSandboxResources(selectedId.value),
-      listSandboxProfiles(selectedId.value),
-      listSandboxLeases(selectedId.value),
+    const [resources, profiles, leases] = await Promise.all([
+      listSandboxResources(productId!),
+      listSandboxProfiles(productId!),
+      listSandboxLeases(productId!),
     ])
-  } catch {
+    if (requestId !== sandboxRequest) return
+    sandboxResources.value = resources
+    sandboxProfiles.value = profiles
+    sandboxLeases.value = leases
+  } catch (e) {
+    if (requestId !== sandboxRequest) return
+    sandboxError.value = e instanceof Error ? e.message : '执行环境加载失败'
     sandboxResources.value = []
     sandboxProfiles.value = []
     sandboxLeases.value = []
   } finally {
-    sandboxLoading.value = false
+    if (requestId === sandboxRequest) sandboxLoading.value = false
   }
 }
 
 async function ensureSandbox() {
   if (!selectedId.value) return
+  sandboxInitializing.value = true
   try {
     await ensureSandboxBundle(selectedId.value)
-    ElMessage.success('已预置 webdev 资源池与默认 Profile')
+    ElMessage.success('已补齐默认执行环境配置；实际运行仍需执行节点和镜像可用')
     await loadSandbox()
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '预置失败')
-  }
+  } finally { sandboxInitializing.value = false }
 }
 
 async function makeDefaultProfile(code: string) {
@@ -111,6 +127,9 @@ async function makeDefaultProfile(code: string) {
 const profileDialog = ref(false)
 const profileMode = ref<'create' | 'edit'>('create')
 const profileSubmitting = ref(false)
+const profileEditorMode = ref<'form' | 'json'>('form')
+const runtimeForm = reactive(readRuntimeProfile(DEFAULT_RUNTIME_PROFILE_JSON))
+const profileProductId = ref<number | null>(null)
 const profileForm = reactive({
   profileCode: '',
   displayName: '',
@@ -120,6 +139,9 @@ const profileForm = reactive({
 })
 
 function openCreateProfile() {
+  profileProductId.value = selectedId.value
+  profileEditorMode.value = 'form'
+  Object.assign(runtimeForm, readRuntimeProfile(DEFAULT_RUNTIME_PROFILE_JSON))
   profileMode.value = 'create'
   profileForm.profileCode = ''
   profileForm.displayName = ''
@@ -130,6 +152,7 @@ function openCreateProfile() {
 }
 
 function openEditProfile(row: SandboxProfile) {
+  profileProductId.value = selectedId.value
   profileMode.value = 'edit'
   profileForm.profileCode = row.profileCode
   profileForm.displayName = row.displayName || row.profileCode
@@ -142,7 +165,30 @@ function openEditProfile(row: SandboxProfile) {
     profileForm.configJson = row.configJson || DEFAULT_RUNTIME_PROFILE_JSON
   }
   profileForm.envVars = extractEnvVarsFromConfig(row.configJson)
+  try {
+    Object.assign(runtimeForm, readRuntimeProfile(profileForm.configJson))
+    profileEditorMode.value = 'form'
+  } catch { profileEditorMode.value = 'json' }
   profileDialog.value = true
+}
+
+function switchProfileEditor(mode: 'form' | 'json') {
+  if (mode === profileEditorMode.value) return
+  try {
+    if (mode === 'json') profileForm.configJson = mergeEnvVarsIntoConfig(writeRuntimeProfile(profileForm.configJson, runtimeForm), profileForm.envVars)
+    else {
+      Object.assign(runtimeForm, readRuntimeProfile(profileForm.configJson))
+      profileForm.envVars = extractEnvVarsFromConfig(profileForm.configJson)
+    }
+    profileEditorMode.value = mode
+  } catch (e) { ElMessage.error(e instanceof Error ? e.message : '配置格式异常') }
+}
+
+function runtimeSummary(row: SandboxProfile) {
+  try {
+    const value = readRuntimeProfile(row.configJson || DEFAULT_RUNTIME_PROFILE_JSON)
+    return `${value.services.map(s => `${s.key} : ${s.containerPort}`).join(' · ') || '未配置服务端口'} · 有效 ${value.ttl} 小时`
+  } catch { return '配置格式异常，请编辑检查' }
 }
 
 function addProfileEnvRow() {
@@ -154,28 +200,37 @@ function removeProfileEnvRow(idx: number) {
 }
 
 async function submitProfile() {
-  if (!selectedId.value) return
+  if (!profileProductId.value) return
   const code = profileForm.profileCode.trim()
   if (!code) {
-    ElMessage.warning('请填写 Profile 编码')
+    ElMessage.warning('请填写方案编码')
     return
   }
   let configJson: string
   try {
-    configJson = mergeEnvVarsIntoConfig(profileForm.configJson, profileForm.envVars)
-  } catch {
-    ElMessage.error('高级配置 JSON 不合法')
+    const jsonMode = profileEditorMode.value === 'json'
+    const values = jsonMode ? readRuntimeProfile(profileForm.configJson) : runtimeForm
+    const envVars = jsonMode ? extractEnvVarsFromConfig(profileForm.configJson) : profileForm.envVars
+    const names = new Set<string>()
+    for (const env of envVars) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(env.name.trim())) throw new Error('环境变量名不能为空，且只能包含字母、数字和下划线，不能以数字开头')
+      if (names.has(env.name.trim())) throw new Error('环境变量名不能重复：' + env.name)
+      names.add(env.name.trim())
+    }
+    configJson = mergeEnvVarsIntoConfig(writeRuntimeProfile(profileForm.configJson, values), envVars)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '配置格式异常')
     return
   }
   profileSubmitting.value = true
   try {
-    await upsertSandboxProfile(selectedId.value, {
+    await upsertSandboxProfile(profileProductId.value, {
       profileCode: code,
       displayName: profileForm.displayName.trim() || code,
       isDefault: profileForm.isDefault,
       configJson,
     })
-    ElMessage.success(profileMode.value === 'create' ? '已创建 Profile' : '已更新 Profile')
+    ElMessage.success(profileMode.value === 'create' ? '已创建运行方案' : '已更新运行方案')
     profileDialog.value = false
     await loadSandbox()
   } catch (e) {
@@ -558,40 +613,46 @@ onMounted(async () => {
         </div>
 
         <div class="version-hd" style="margin-top: 20px">
-          <span>沙箱与运行时</span>
-          <el-button v-if="canOperate" size="small" :loading="sandboxLoading" @click="ensureSandbox">
-            预置 webdev 默认
+          <span>执行环境</span>
+          <el-button v-if="canOperate" size="small" :loading="sandboxInitializing" :disabled="sandboxLoading || !!sandboxError" @click="ensureSandbox">
+            补齐默认配置
           </el-button>
         </div>
         <div v-loading="sandboxLoading" class="sandbox-block">
           <p class="form-tip">
-            只读查代码走本机；编码/编译/启动申请 webdev 容器。
-            依赖环境变量在各自 Profile 里配（编辑 Profile），申请该 Profile 时 -e 注入。
+            配置 AI 编码、构建和测试时使用的隔离环境。先补齐默认配置，再按项目修改端口与依赖地址；仅保存配置不会启动服务。
           </p>
-          <h4 class="sandbox-sub">资源池</h4>
+          <el-alert v-if="sandboxError" :title="sandboxError" type="error" :closable="false" show-icon><el-button link type="primary" @click="loadSandbox">重新加载</el-button></el-alert>
+          <div v-else-if="!sandboxLoading" class="environment-summary">
+            <div><small>默认运行方案</small><strong>{{ sandboxProfiles.find(p => p.isDefault)?.displayName || sandboxProfiles.find(p => p.isDefault)?.profileCode || '尚未配置' }}</strong></div>
+            <div><small>执行资源</small><strong>{{ sandboxResources.length }} 组配置</strong></div>
+            <div><small>当前占用</small><strong>{{ sandboxLeases.length }} 个任务</strong></div>
+          </div>
+          <el-collapse v-model="sandboxDetails"><el-collapse-item name="resources" title="高级：执行资源与镜像">
+          <p class="form-tip">由部署人员维护的容器镜像与并发名额。存在资源配置不代表执行节点或镜像已可用。</p>
           <el-table :data="sandboxResources" size="small" stripe empty-text="暂无资源，请点预置">
             <el-table-column prop="resourceCode" label="编码" min-width="100" />
             <el-table-column prop="image" label="镜像" min-width="180" />
-            <el-table-column prop="maxSlots" label="席位" width="80" />
+            <el-table-column prop="maxSlots" label="并发名额" width="90" />
             <el-table-column prop="status" label="状态" width="90" />
           </el-table>
+          </el-collapse-item></el-collapse>
           <div class="version-hd" style="margin-top: 4px">
-            <h4 class="sandbox-sub" style="margin: 0">运行时 Profile</h4>
-            <el-button v-if="canOperate" size="small" @click="openCreateProfile">新增 Profile</el-button>
+            <h4 class="sandbox-sub" style="margin: 0">运行方案</h4>
+            <el-button v-if="canOperate" size="small" :disabled="sandboxLoading || !!sandboxError" @click="openCreateProfile">新增运行方案</el-button>
           </div>
           <p class="form-tip">
-            每个产品可多套（如 default / 仅后端 / IT 多端口）。流水线不指定时用「默认」那套；不同产品各自维护，互不影响。
+            运行方案是一组端口、环境变量和执行时长设置。流水线未指定方案时使用默认项，可按需要配置多套。
           </p>
-          <el-table :data="sandboxProfiles" size="small" stripe empty-text="暂无 Profile，可预置或新增">
-            <el-table-column prop="profileCode" label="编码" min-width="100" />
-            <el-table-column prop="displayName" label="名称" min-width="120" />
+          <el-table :data="sandboxProfiles" size="small" stripe :empty-text="sandboxError ? '加载失败，请重试' : '还没有运行方案，点击「补齐默认配置」开始'">
+            <el-table-column label="方案" min-width="160"><template #default="{ row }"><strong>{{ row.displayName || row.profileCode }}</strong><div class="form-tip">{{ row.profileCode }}</div></template></el-table-column>
+            <el-table-column label="配置摘要" min-width="220"><template #default="{ row }">{{ runtimeSummary(row) }}</template></el-table-column>
             <el-table-column label="默认" width="80">
               <template #default="{ row }">
                 <el-tag v-if="row.isDefault" type="success" size="small">是</el-tag>
                 <span v-else>否</span>
               </template>
             </el-table-column>
-            <el-table-column prop="version" label="版本" width="70" />
             <el-table-column v-if="canOperate" label="操作" width="220">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openEditProfile(row)">编辑</el-button>
@@ -614,14 +675,15 @@ onMounted(async () => {
               </template>
             </el-table-column>
           </el-table>
-          <h4 class="sandbox-sub">当前占用</h4>
+          <el-collapse><el-collapse-item name="leases" :title="`执行占用明细（${sandboxLeases.length}）`">
           <el-table :data="sandboxLeases" size="small" stripe empty-text="无占用">
-            <el-table-column prop="id" label="lease" width="90" />
-            <el-table-column prop="purpose" label="用途" width="100" />
+            <el-table-column prop="id" label="执行编号" width="90" />
+            <el-table-column label="用途" width="100"><template #default="{ row }">{{ ({ PIPE_CODE: '开发编码', PIPE_IT: '集成测试' } as Record<string, string>)[row.purpose] || row.purpose }}</template></el-table-column>
             <el-table-column prop="sessionId" label="会话" width="90" />
-            <el-table-column prop="worktreeHostPath" label="worktree" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="worktreeHostPath" label="代码工作目录" min-width="200" show-overflow-tooltip />
             <el-table-column prop="expiresAt" label="过期" min-width="150" />
           </el-table>
+          </el-collapse-item></el-collapse>
         </div>
       </section>
       <section v-else class="detail empty-detail">请选择左侧产品</section>
@@ -629,39 +691,60 @@ onMounted(async () => {
 
     <el-dialog
       v-model="profileDialog"
-      :title="profileMode === 'create' ? '新增运行时 Profile' : '编辑运行时 Profile'"
-      width="720px"
+      :title="profileMode === 'create' ? '新增运行方案' : '编辑运行方案'"
+      width="min(860px, 96vw)"
       destroy-on-close
+      :close-on-click-modal="!profileSubmitting"
+      :close-on-press-escape="!profileSubmitting"
+      :show-close="!profileSubmitting"
     >
-      <el-form label-width="100px">
+      <el-form label-width="110px" :disabled="profileSubmitting">
         <el-form-item label="编码" required>
           <el-input
             v-model="profileForm.profileCode"
             :disabled="profileMode === 'edit'"
             maxlength="64"
-            placeholder="如 default / java-api / it-full"
+            placeholder="方案标识，例如 default、backend、integration"
           />
         </el-form-item>
         <el-form-item label="名称">
-          <el-input v-model="profileForm.displayName" maxlength="128" placeholder="展示名" />
+          <el-input v-model="profileForm.displayName" maxlength="128" placeholder="例如：日常研发环境、接口测试环境" />
         </el-form-item>
         <el-form-item label="设为默认">
           <el-switch v-model="profileForm.isDefault" />
+          <span class="form-tip" style="margin-left: 12px">流水线未指定方案时使用此项；修改对后续申请生效。</span>
         </el-form-item>
-        <el-form-item label="环境变量">
+        <div class="runtime-editor-mode"><el-radio-group :model-value="profileEditorMode" @change="switchProfileEditor"><el-radio-button value="form">常用配置</el-radio-button><el-radio-button value="json">高级 JSON</el-radio-button></el-radio-group></div>
+        <template v-if="profileEditorMode === 'form'">
+        <el-form-item label="容器镜像"><el-input v-model="runtimeForm.image" placeholder="留空使用执行资源的默认镜像" /></el-form-item>
+        <el-form-item label="有效时长"><el-input-number v-model="runtimeForm.ttl" :min="1" :precision="0" /><span class="form-tip" style="margin-left: 12px">小时，任务申请的执行环境到期后回收。</span></el-form-item>
+        <el-form-item label="服务端口">
+          <div style="width: 100%"><p class="form-tip">填写程序在容器内监听的端口；对外访问端口由平台从下方范围自动分配。</p>
+          <div v-for="(service, index) in runtimeForm.services" :key="index" class="service-port-row">
+            <el-input v-model="service.key" placeholder="服务标识，如 api" aria-label="服务标识" />
+            <el-input-number v-model="service.containerPort" :min="1" :max="65535" :precision="0" aria-label="容器内端口" />
+            <el-input v-model="service.env" placeholder="端口变量，如 SERVER_PORT" aria-label="端口环境变量名" />
+            <el-button link type="danger" @click="runtimeForm.services.splice(index, 1)">删除</el-button>
+          </div>
+          <el-button size="small" @click="runtimeForm.services.push({ key: '', containerPort: 8080, env: '', protocol: 'http' })">添加服务端口</el-button></div>
+        </el-form-item>
+        <el-form-item label="宿主机端口池"><div class="runtime-port-pool"><el-input-number v-model="runtimeForm.portStart" :min="1" :max="65535" :precision="0" /> 至 <el-input-number v-model="runtimeForm.portEnd" :min="1" :max="65535" :precision="0" /></div><div class="form-tip">通常保留默认范围；无需给每个任务手动指定访问端口。</div></el-form-item>
+        <el-form-item label="依赖缓存"><el-checkbox v-model="runtimeForm.cacheM2">复用 Maven 缓存</el-checkbox><el-checkbox v-model="runtimeForm.cacheNpm">复用 npm 缓存</el-checkbox></el-form-item>
+        <el-form-item label="依赖与变量">
           <div class="form-tip" style="margin-bottom: 8px">
-            跟本 Profile 走。例：USER_CENTER_URL、SPRING_DATASOURCE_URL；开发初期可空。
+            按项目实际读取的变量名配置数据库、Redis 或外部接口地址，例如 SPRING_DATASOURCE_URL。地址必须能从容器内访问，localhost 指容器自身。填写变量不会自动启动依赖服务。
           </div>
           <div v-for="(row, idx) in profileForm.envVars" :key="idx" class="env-row">
             <el-checkbox v-model="row.enabled" />
             <el-input v-model="row.name" placeholder="变量名" style="width: 180px" />
-            <el-input v-model="row.value" placeholder="值" style="flex: 1" />
+            <el-input v-model="row.value" :type="/password|secret|token|key/i.test(row.name) ? 'password' : 'text'" :show-password="/password|secret|token|key/i.test(row.name)" placeholder="容器内可访问的地址或配置值" style="flex: 1" />
             <el-input v-model="row.remark" placeholder="备注" style="width: 100px" />
             <el-button link type="danger" @click="removeProfileEnvRow(idx)">删</el-button>
           </div>
           <el-button size="small" @click="addProfileEnvRow">添加变量</el-button>
         </el-form-item>
-        <el-form-item label="高级 JSON">
+        </template>
+        <el-form-item v-else label="完整配置 JSON">
           <el-input
             v-model="profileForm.configJson"
             type="textarea"
@@ -669,12 +752,12 @@ onMounted(async () => {
             placeholder="端口、schema 模式、缓存等"
           />
           <div class="form-tip">
-            改 ports / schemaPattern / cacheMounts 等；保存时会把上方环境变量写入 envVars。
+            面向高级配置，数据库隔离模板等额外字段会保留。切回常用配置会同步表单；保存使用当前模式内容。此处配置不等于数据库连通性检查。
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="profileDialog = false">取消</el-button>
+        <el-button :disabled="profileSubmitting" @click="profileDialog = false">取消</el-button>
         <el-button type="primary" :loading="profileSubmitting" @click="submitProfile">保存</el-button>
       </template>
     </el-dialog>
@@ -939,6 +1022,14 @@ onMounted(async () => {
 .sandbox-block {
   margin-bottom: var(--dap-space-4);
 }
+.environment-summary { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:16px; margin:18px 0; padding:18px; border:1px solid var(--dap-gray-200); border-radius:8px; background:var(--dap-gray-50); }
+.environment-summary small { display:block; font-size:11px; color:var(--dap-gray-500); margin-bottom:8px; }
+.environment-summary strong { font-size:14px; font-weight:500; color:var(--dap-gray-900); overflow-wrap:anywhere; }
+.runtime-editor-mode { margin:8px 0 24px 110px; }
+.service-port-row { display:grid; grid-template-columns:minmax(90px,1fr) 150px minmax(120px,1.5fr) auto; gap:8px; margin:10px 0; align-items:center; }
+.runtime-port-pool { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.env-row { width:100%; flex-wrap:wrap; }
+@media(max-width:700px) { .environment-summary { grid-template-columns:1fr; } .service-port-row { grid-template-columns:1fr 1fr; } .runtime-editor-mode { margin-left:0; } }
 .sandbox-sub {
   margin: 12px 0 8px;
   font-size: 13px;

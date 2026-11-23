@@ -1,6 +1,7 @@
 package com.lonple.dap.server.modules.tnworkspace;
 
 import com.lonple.dap.server.common.ApiResponse;
+import com.lonple.dap.server.common.BizException;
 import com.lonple.dap.server.modules.agenttool.AgentFsToolService;
 import com.lonple.dap.server.modules.chat.WorkspaceSessionService;
 import com.lonple.dap.server.modules.chat.dto.ChatSessionVO;
@@ -13,6 +14,7 @@ import com.lonple.dap.server.modules.tnworkspace.dto.WorkspaceFileContentVO;
 import com.lonple.dap.server.modules.tnworkspace.dto.WorkspaceNodeVO;
 import com.lonple.dap.server.modules.tnworkspace.dto.WorkspaceUpdateFileRequest;
 import com.lonple.dap.server.security.RequirePermission;
+import com.lonple.dap.server.security.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -103,8 +105,11 @@ public class WorkbenchWorkspaceController {
     }
 
     @GetMapping("/session-task-types")
-    @RequirePermission("work:access")
     public ApiResponse<List<?>> sessionTaskTypes() {
+        var permissions = UserContext.require().getPermissions();
+        if (!permissions.contains("work:access") && !permissions.contains("prompt:view")) {
+            throw new BizException(403, "无权限查看任务类型");
+        }
         return ApiResponse.ok(workspaceSessionService.listTaskTypeOptions());
     }
 

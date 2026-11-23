@@ -53,19 +53,19 @@ public class PromptService {
         positionService.ensureBuiltin("QA", "测试");
         positionService.ensureBuiltin("UI", "UI设计师");
 
-        // AI 初审两岗：默认提示词有更新时覆盖正文（岗位关注点调整）
+        // 所有默认项均只补缺，不覆盖租户已维护的正文。
         ensureOne(tenantId, "PM", SessionTaskType.REVIEW_PRE,
                 "REVIEW_PRE_PM", "AI初审·业务（产品）",
-                "prompt-defaults/REVIEW_PRE_PM.md", created, skipped, missing, true);
+                "prompt-defaults/REVIEW_PRE_PM.md", created, skipped, missing);
         ensureOne(tenantId, "ARCH", SessionTaskType.REVIEW_PRE_TECH,
                 "REVIEW_PRE_TECH", "AI初审·技术（架构）",
-                "prompt-defaults/REVIEW_PRE_TECH.md", created, skipped, missing, true);
+                "prompt-defaults/REVIEW_PRE_TECH.md", created, skipped, missing);
         ensureOne(tenantId, "PM", SessionTaskType.GEN_PRD,
                 "GEN_PRD_PM", "生成需求分析（产品）",
                 "prompt-defaults/GEN_PRD_PM.md", created, skipped, missing);
         ensureOne(tenantId, "ARCH", SessionTaskType.GEN_ARCH,
                 "GEN_ARCH_ARCH", "生成架构设计（架构）",
-                "prompt-defaults/GEN_ARCH_ARCH.md", created, skipped, missing, true);
+                "prompt-defaults/GEN_ARCH_ARCH.md", created, skipped, missing);
         ensureOne(tenantId, "UI", SessionTaskType.GEN_UI,
                 "GEN_UI_UI", "生成UI设计（设计师）",
                 "prompt-defaults/GEN_UI_UI.md", created, skipped, missing);
@@ -137,19 +137,19 @@ public class PromptService {
                 "prompt-defaults/GEN_CODE_REVIEW_DEV.md", created, skipped, missing);
         ensureOne(tenantId, "QA", SessionTaskType.GEN_INT_TEST,
                 "GEN_INT_TEST_QA", "集成测试（测试）",
-                "prompt-defaults/GEN_INT_TEST_QA.md", created, skipped, missing, true);
+                "prompt-defaults/GEN_INT_TEST_QA.md", created, skipped, missing);
         ensureOne(tenantId, "DEV", SessionTaskType.GEN_ISSUE_ANALYSIS,
                 "GEN_ISSUE_ANALYSIS_DEV", "问题分析（研发）",
-                "prompt-defaults/GEN_ISSUE_ANALYSIS_DEV.md", created, skipped, missing, true);
+                "prompt-defaults/GEN_ISSUE_ANALYSIS_DEV.md", created, skipped, missing);
         ensureOne(tenantId, "DEV", SessionTaskType.GEN_ISSUE_FIX,
                 "GEN_ISSUE_FIX_DEV", "问题修复（研发）",
-                "prompt-defaults/GEN_ISSUE_FIX_DEV.md", created, skipped, missing, true); // replace: 确认走对话 JSON
+                "prompt-defaults/GEN_ISSUE_FIX_DEV.md", created, skipped, missing);
         ensureOne(tenantId, "DEV", SessionTaskType.GEN_ISSUE_CODE_REVIEW,
                 "GEN_ISSUE_CODE_REVIEW_DEV", "问题代码评审（研发）",
                 "prompt-defaults/GEN_ISSUE_CODE_REVIEW_DEV.md", created, skipped, missing);
         ensureOne(tenantId, "QA", SessionTaskType.GEN_ISSUE_INT_TEST,
                 "GEN_ISSUE_INT_TEST_QA", "问题集成测试（测试）",
-                "prompt-defaults/GEN_ISSUE_INT_TEST_QA.md", created, skipped, missing, true);
+                "prompt-defaults/GEN_ISSUE_INT_TEST_QA.md", created, skipped, missing);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("created", created);
@@ -168,21 +168,6 @@ public class PromptService {
             List<String> created,
             List<String> skipped,
             List<String> missing) {
-        ensureOne(tenantId, positionCode, taskType, promptCode, promptName, classpathMd,
-                created, skipped, missing, false);
-    }
-
-    private void ensureOne(
-            Long tenantId,
-            String positionCode,
-            SessionTaskType taskType,
-            String promptCode,
-            String promptName,
-            String classpathMd,
-            List<String> created,
-            List<String> skipped,
-            List<String> missing,
-            boolean replaceContent) {
         SysPosition position = positionService.findByCode(positionCode);
         if (position == null) {
             missing.add(positionCode);
@@ -194,15 +179,7 @@ public class PromptService {
                 .eq(SysPrompt::getTaskTypeCode, taskType.name())
                 .last("LIMIT 1"));
         if (existing != null) {
-            if (replaceContent) {
-                existing.setContent(loadDefaultPrompt(classpathMd));
-                existing.setName(promptName);
-                existing.setUpdatedAt(LocalDateTime.now());
-                promptMapper.updateById(existing);
-                created.add(existing.getCode() + "(updated)");
-            } else {
-                skipped.add(positionCode + "+" + taskType.name());
-            }
+            skipped.add(positionCode + "+" + taskType.name());
             return;
         }
         // code 冲突则换一个
@@ -227,15 +204,16 @@ public class PromptService {
     }
 
     private String loadDefaultPrompt(String classpath) {
-        try {
-            ClassPathResource res = new ClassPathResource(classpath);
-            if (!res.exists()) {
-                return "";
+        ClassPathResource res = new ClassPathResource(classpath);
+        try (var input = res.getInputStream()) {
+            String content = StreamUtils.copyToString(input, StandardCharsets.UTF_8);
+            if (!StringUtils.hasText(content)) {
+                throw new IllegalStateException("empty default prompt");
             }
-            return StreamUtils.copyToString(res.getInputStream(), StandardCharsets.UTF_8);
+            return content;
         } catch (Exception e) {
             log.warn("load default prompt failed path={}: {}", classpath, e.getMessage());
-            return "";
+            throw new BizException("默认提示词读取失败：" + classpath);
         }
     }
 

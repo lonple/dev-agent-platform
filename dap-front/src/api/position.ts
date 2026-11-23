@@ -12,6 +12,7 @@ export interface PositionItem {
   id: number
   name: string
   code?: string
+  builtin?: boolean
   description?: string
   skills?: SkillItem[]
 }
@@ -36,6 +37,10 @@ export function listPositions(withSkills = true) {
 
 export function getPosition(id: number) {
   return request.get<any, PositionItem>(`/positions/${id}`)
+}
+
+export function ensureBuiltinPositions() {
+  return request.post<any, PositionItem[]>('/positions/ensure-builtin')
 }
 
 export function createPosition(data: PositionSavePayload) {
