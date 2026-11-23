@@ -1,0 +1,19 @@
+server:
+  port: 9300
+
+sandbox:
+  shared-token: ${SANDBOX_TOKEN:dev-sandbox-token}
+  node-code: local-dev
+  manager-base-url: http://127.0.0.1:9210
+  docker-command: docker
+  image: dap-sandbox-webdev:dev
+  port-range-start: 9400
+  port-range-end: 9499
+  code-tools-container-port: 9100
+  ready-timeout-sec: 90
+  m2-cache-volume: dap-m2-cache
+  npm-cache-volume: dap-npm-cache
+
+logging:
+  level:
+    com.lonple.dap.sandbox.client: INFO

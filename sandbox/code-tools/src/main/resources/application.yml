@@ -1,0 +1,15 @@
+server:
+  # 管理面端口；业务 SERVER_PORT 由沙箱 env 另注，互不抢
+  port: ${CODE_TOOLS_PORT:9100}
+
+sandbox:
+  workspace-root: ${WORKSPACE_ROOT:/workspace}
+  shared-token: ${SANDBOX_TOKEN:dev-sandbox-token}
+  action-timeout-sec: ${ACTION_TIMEOUT_SEC:180}
+  ripgrep-executable: ${RIPGREP_EXECUTABLE:rg}
+  ripgrep-timeout-sec: 15
+  ripgrep-max-hits: 40
+
+logging:
+  level:
+    com.lonple.dap.codetools: INFO

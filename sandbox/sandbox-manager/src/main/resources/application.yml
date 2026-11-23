@@ -1,0 +1,13 @@
+server:
+  port: 9210
+
+sandbox:
+  shared-token: ${SANDBOX_TOKEN:dev-sandbox-token}
+  health-interval-ms: 10000
+  nodes:
+    - code: local-dev
+      client-base-url: http://127.0.0.1:9300
+
+logging:
+  level:
+    com.lonple.dap.sandbox.manager: INFO
