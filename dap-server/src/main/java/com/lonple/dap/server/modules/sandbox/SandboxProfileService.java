@@ -145,7 +145,7 @@ public class SandboxProfileService {
         if (def == null) {
             ProfileSaveReq req = new ProfileSaveReq();
             req.profileCode = "default";
-            req.displayName = "默认 webdev";
+            req.displayName = "默认运行方案（待配置）";
             req.isDefault = true;
             req.configJson = RuntimeProfileDefaults.DEFAULT_CONFIG_JSON;
             upsertProfile(productId, req);

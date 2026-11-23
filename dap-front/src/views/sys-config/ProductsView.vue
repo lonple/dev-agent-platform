@@ -172,6 +172,18 @@ function openEditProfile(row: SandboxProfile) {
   profileDialog.value = true
 }
 
+async function resetRuntimeTemplate() {
+  try {
+    await ElMessageBox.confirm('将清空当前表单的服务端口、依赖变量和高级配置，恢复产品无关的原始模板。方案名称与编码保留；点击保存后才会更新此方案。', '按原始模板重配', {
+      type: 'warning', confirmButtonText: '重置表单', cancelButtonText: '保留当前配置',
+    })
+    profileForm.configJson = DEFAULT_RUNTIME_PROFILE_JSON
+    profileForm.envVars = []
+    Object.assign(runtimeForm, readRuntimeProfile(DEFAULT_RUNTIME_PROFILE_JSON))
+    profileEditorMode.value = 'form'
+  } catch { /* 取消时保留现有内容。 */ }
+}
+
 function switchProfileEditor(mode: 'form' | 'json') {
   if (mode === profileEditorMode.value) return
   try {
@@ -187,7 +199,7 @@ function switchProfileEditor(mode: 'form' | 'json') {
 function runtimeSummary(row: SandboxProfile) {
   try {
     const value = readRuntimeProfile(row.configJson || DEFAULT_RUNTIME_PROFILE_JSON)
-    return `${value.services.map(s => `${s.key} : ${s.containerPort}`).join(' · ') || '未配置服务端口'} · 有效 ${value.ttl} 小时`
+    return `${value.services.map(s => `${s.key} : ${s.containerPort ?? '待填写'}`).join(' · ') || '不映射业务端口'} · 有效 ${value.ttl} 小时`
   } catch { return '配置格式异常，请编辑检查' }
 }
 
@@ -620,7 +632,7 @@ onMounted(async () => {
         </div>
         <div v-loading="sandboxLoading" class="sandbox-block">
           <p class="form-tip">
-            配置 AI 编码、构建和测试时使用的隔离环境。先补齐默认配置，再按项目修改端口与依赖地址；仅保存配置不会启动服务。
+            配置 AI 编码、构建和测试时使用的隔离环境。每个产品独立保存方案；新方案从空白模板开始，不预填其他产品的端口或依赖地址。仅保存配置不会启动服务。
           </p>
           <el-alert v-if="sandboxError" :title="sandboxError" type="error" :closable="false" show-icon><el-button link type="primary" @click="loadSandbox">重新加载</el-button></el-alert>
           <div v-else-if="!sandboxLoading" class="environment-summary">
@@ -698,6 +710,7 @@ onMounted(async () => {
       :close-on-press-escape="!profileSubmitting"
       :show-close="!profileSubmitting"
     >
+      <el-alert type="info" :closable="false" show-icon class="runtime-product-note" :title="`当前产品：${products.find(p => p.id === profileProductId)?.name || '—'}。配置仅保存到此产品；新建方案不复制其他产品。`" />
       <el-form label-width="110px" :disabled="profileSubmitting">
         <el-form-item label="编码" required>
           <el-input
@@ -706,9 +719,11 @@ onMounted(async () => {
             maxlength="64"
             placeholder="方案标识，例如 default、backend、integration"
           />
+          <div class="form-tip">方案的唯一标识，用于流水线选择，例如 dev 或 integration；创建后不能改编码。不同产品可使用相同编码。</div>
         </el-form-item>
         <el-form-item label="名称">
           <el-input v-model="profileForm.displayName" maxlength="128" placeholder="例如：日常研发环境、接口测试环境" />
+          <div class="form-tip">方便识别用途的名称，不会修改项目名称、分支或程序启动参数。</div>
         </el-form-item>
         <el-form-item label="设为默认">
           <el-switch v-model="profileForm.isDefault" />
@@ -716,24 +731,33 @@ onMounted(async () => {
         </el-form-item>
         <div class="runtime-editor-mode"><el-radio-group :model-value="profileEditorMode" @change="switchProfileEditor"><el-radio-button value="form">常用配置</el-radio-button><el-radio-button value="json">高级 JSON</el-radio-button></el-radio-group></div>
         <template v-if="profileEditorMode === 'form'">
-        <el-form-item label="容器镜像"><el-input v-model="runtimeForm.image" placeholder="留空使用执行资源的默认镜像" /></el-form-item>
+        <el-form-item label="容器镜像"><el-input v-model="runtimeForm.image" placeholder="留空使用执行资源的默认镜像" /><div class="form-tip">提供 JDK、Node 等构建工具的 Docker 镜像名称。通常留空；指定镜像须能在执行节点使用，不是业务接口地址。</div></el-form-item>
         <el-form-item label="有效时长"><el-input-number v-model="runtimeForm.ttl" :min="1" :precision="0" /><span class="form-tip" style="margin-left: 12px">小时，任务申请的执行环境到期后回收。</span></el-form-item>
         <el-form-item label="服务端口">
-          <div style="width: 100%"><p class="form-tip">填写程序在容器内监听的端口；对外访问端口由平台从下方范围自动分配。</p>
+          <div style="width: 100%"><p class="form-tip">仅当需要访问容器中启动的网页或接口时添加。纯编译、单元测试可不填；必须与本产品实际启动配置一致。</p>
+          <div class="service-port-labels"><span>服务标识</span><span>容器内监听端口</span><span>注入的端口变量（可选）</span><span>操作</span></div>
           <div v-for="(service, index) in runtimeForm.services" :key="index" class="service-port-row">
-            <el-input v-model="service.key" placeholder="服务标识，如 api" aria-label="服务标识" />
-            <el-input-number v-model="service.containerPort" :min="1" :max="65535" :precision="0" aria-label="容器内端口" />
-            <el-input v-model="service.env" placeholder="端口变量，如 SERVER_PORT" aria-label="端口环境变量名" />
+            <el-input v-model="service.key" placeholder="如 api，仅用于区分服务" aria-label="服务标识" />
+            <el-input-number v-model="service.containerPort" :min="1" :max="65535" :precision="0" placeholder="项目实际端口" aria-label="容器内端口" />
+            <el-input v-model="service.env" placeholder="程序不读取变量则留空" aria-label="端口环境变量名" />
             <el-button link type="danger" @click="runtimeForm.services.splice(index, 1)">删除</el-button>
           </div>
-          <el-button size="small" @click="runtimeForm.services.push({ key: '', containerPort: 8080, env: '', protocol: 'http' })">添加服务端口</el-button></div>
+          <p v-if="!runtimeForm.services.length" class="form-tip">当前无服务端口。不会自动添加 web、api 或 admin。</p>
+          <el-button size="small" @click="runtimeForm.services.push({ key: '', containerPort: null, env: '', protocol: 'http' })">添加本产品的服务端口</el-button>
+          <div class="runtime-field-help">
+            <p><b>服务标识：</b>方案内唯一的名称，如 web、api。它只区分端口映射，不会自动启动对应服务。</p>
+            <p><b>容器内监听端口：</b>程序实际监听的端口，按配置文件或启动命令填写。不同容器可使用相同端口，无需为避让其他产品改号。</p>
+            <p><b>端口变量：</b>平台将容器内端口写入此环境变量。如端口填 8200、变量填 SERVER_PORT，则注入 SERVER_PORT=8200。程序必须读取该变量才会生效；随意填写 WEB_PORT 不会自动改变 Vite 端口。</p>
+            <p><b>DAP 示例（不是预填值）：</b>本仓库前端开发配置为 8201，后端为 8200；如果容器启动命令另设端口，以容器启动配置为准。</p>
+          </div></div>
         </el-form-item>
-        <el-form-item label="宿主机端口池"><div class="runtime-port-pool"><el-input-number v-model="runtimeForm.portStart" :min="1" :max="65535" :precision="0" /> 至 <el-input-number v-model="runtimeForm.portEnd" :min="1" :max="65535" :precision="0" /></div><div class="form-tip">通常保留默认范围；无需给每个任务手动指定访问端口。</div></el-form-item>
-        <el-form-item label="依赖缓存"><el-checkbox v-model="runtimeForm.cacheM2">复用 Maven 缓存</el-checkbox><el-checkbox v-model="runtimeForm.cacheNpm">复用 npm 缓存</el-checkbox></el-form-item>
+        <el-form-item label="宿主机端口池"><div class="runtime-port-pool"><el-input-number v-model="runtimeForm.portStart" :min="1" :max="65535" :precision="0" /> 至 <el-input-number v-model="runtimeForm.portEnd" :min="1" :max="65535" :precision="0" /></div><div class="form-tip">执行机器提供给外部访问的端口范围，平台自动分配。例如分配 18023 → 容器 8200，访问的是执行机器的 18023。它与程序监听端口不同，通常保留原始范围。</div></el-form-item>
+        <el-form-item label="依赖缓存"><el-checkbox v-model="runtimeForm.cacheM2">复用 Maven 缓存</el-checkbox><el-checkbox v-model="runtimeForm.cacheNpm">复用 npm 缓存</el-checkbox><div class="form-tip">按项目需要开启，减少 Java / Node 依赖重复下载；不会自动安装或启动数据库、Redis。</div></el-form-item>
         <el-form-item label="依赖与变量">
           <div class="form-tip" style="margin-bottom: 8px">
             按项目实际读取的变量名配置数据库、Redis 或外部接口地址，例如 SPRING_DATASOURCE_URL。地址必须能从容器内访问，localhost 指容器自身。填写变量不会自动启动依赖服务。
           </div>
+          <div v-if="profileForm.envVars.length" class="env-labels"><span>是否注入</span><span>变量名</span><span>变量值</span><span>用途备注</span></div>
           <div v-for="(row, idx) in profileForm.envVars" :key="idx" class="env-row">
             <el-checkbox v-model="row.enabled" />
             <el-input v-model="row.name" placeholder="变量名" style="width: 180px" />
@@ -742,6 +766,7 @@ onMounted(async () => {
             <el-button link type="danger" @click="removeProfileEnvRow(idx)">删</el-button>
           </div>
           <el-button size="small" @click="addProfileEnvRow">添加变量</el-button>
+          <div class="form-tip">勾选后才注入。变量名必须与程序读取的名称一致；备注仅供人查看。密码值可点击眼睛查看。已有项目专用的变量不应照搬到新产品。</div>
         </el-form-item>
         </template>
         <el-form-item v-else label="完整配置 JSON">
@@ -754,9 +779,20 @@ onMounted(async () => {
           <div class="form-tip">
             面向高级配置，数据库隔离模板等额外字段会保留。切回常用配置会同步表单；保存使用当前模式内容。此处配置不等于数据库连通性检查。
           </div>
+          <details class="runtime-field-help"><summary>高级属性含义与生效边界</summary>
+            <p><b>imageOverride：</b>本方案指定的镜像；null 表示使用产品执行资源的镜像。</p>
+            <p><b>sandbox.leaseTtlHours：</b>执行环境的有效小时数。preferredResourceCodes 是优先尝试的资源编码列表，空数组表示不指定偏好。</p>
+            <p><b>ports.pool：</b>宿主机可分配的端口范围。services 中 key 区分服务，containerPort 是容器内端口，env 是注入端口数值的变量名；protocol 不是启动命令，也不自动开启 HTTPS。</p>
+            <p><b>envVars：</b>项目实际使用的环境变量；name 为名称，value 为值，enabled 控制是否注入，remark 仅作备注。envTemplates 是支持占位符替换的变量模板，同名时 envVars 优先。</p>
+            <p><b>database.schemaPattern：</b>生成数据库 schema 名称的规则。urlTemplate 用于生成 JDBC_URL，业务程序仍须读取该变量；不会仅凭此配置自动创建数据库或完成迁移。</p>
+            <p><b>middleware：</b>redisKeyPrefixPattern、mqPrefixPattern 生成任务级前缀，不是 Redis 或消息队列的连接地址。</p>
+            <p><b>cacheMounts：</b>m2、npm 决定是否挂载依赖缓存。</p>
+            <p><b>历史配置注意：</b>startTemplates、flywayEnabled、dbHostRef、releaseWorktreeOnClose、autoCommitOnRelease 在当前执行实现中未形成对应自动操作，不应当作已生效开关。原始模板不再预置这些业务假设。</p>
+          </details>
         </el-form-item>
       </el-form>
       <template #footer>
+        <el-button :disabled="profileSubmitting" style="float: left" @click="resetRuntimeTemplate">按原始模板重配</el-button>
         <el-button :disabled="profileSubmitting" @click="profileDialog = false">取消</el-button>
         <el-button type="primary" :loading="profileSubmitting" @click="submitProfile">保存</el-button>
       </template>
@@ -1026,10 +1062,16 @@ onMounted(async () => {
 .environment-summary small { display:block; font-size:11px; color:var(--dap-gray-500); margin-bottom:8px; }
 .environment-summary strong { font-size:14px; font-weight:500; color:var(--dap-gray-900); overflow-wrap:anywhere; }
 .runtime-editor-mode { margin:8px 0 24px 110px; }
+.runtime-product-note { margin-bottom:20px; }
+.service-port-labels { display:grid; grid-template-columns:minmax(90px,1fr) 150px minmax(120px,1.5fr) auto; gap:8px; margin-top:16px; font-size:11px; color:var(--dap-gray-500); }
+.runtime-field-help { margin-top:12px; padding:12px 16px; background:var(--dap-gray-50); border-radius:6px; font-size:12px; line-height:1.8; color:var(--dap-gray-700); }
+.runtime-field-help p { margin:4px 0; }
+.env-labels { display:flex; gap:18px; width:100%; margin:8px 0; font-size:11px; color:var(--dap-gray-500); }
+.env-labels span:nth-child(2) { width:160px; } .env-labels span:nth-child(3) { flex:1; }
 .service-port-row { display:grid; grid-template-columns:minmax(90px,1fr) 150px minmax(120px,1.5fr) auto; gap:8px; margin:10px 0; align-items:center; }
 .runtime-port-pool { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .env-row { width:100%; flex-wrap:wrap; }
-@media(max-width:700px) { .environment-summary { grid-template-columns:1fr; } .service-port-row { grid-template-columns:1fr 1fr; } .runtime-editor-mode { margin-left:0; } }
+@media(max-width:700px) { .environment-summary { grid-template-columns:1fr; } .service-port-row,.service-port-labels { grid-template-columns:1fr 1fr; } .runtime-editor-mode { margin-left:0; } .env-labels { display:none; } }
 .sandbox-sub {
   margin: 12px 0 8px;
   font-size: 13px;

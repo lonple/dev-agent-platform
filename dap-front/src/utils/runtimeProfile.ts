@@ -1,7 +1,7 @@
 export interface RuntimeServicePort {
   [key: string]: unknown
   key: string
-  containerPort: number
+  containerPort: number | null
   env: string
 }
 export interface RuntimeProfileForm {
@@ -30,14 +30,14 @@ export function readRuntimeProfile(json: string): RuntimeProfileForm {
     portStart: pool.start ?? 18000, portEnd: pool.end ?? 18999,
     services: (ports.services ?? []).map((item: unknown) => {
       const s = object(item, '服务端口')
-      return { ...s, key: s.key ?? '', containerPort: s.containerPort ?? 8080, env: s.env ?? '' }
+      return { ...s, key: s.key ?? '', containerPort: s.containerPort ?? null, env: s.env ?? '' }
     }),
     cacheM2: cache.m2 ?? true, cacheNpm: cache.npm ?? true,
   }
 }
 export function writeRuntimeProfile(json: string, form: RuntimeProfileForm): string {
   const cfg = object(JSON.parse(json), '运行方案')
-  const port = (n: number) => Number.isInteger(n) && n >= 1 && n <= 65535
+  const port = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 65535
   if (!Number.isInteger(form.ttl) || form.ttl < 1) throw new Error('有效时长必须是大于零的整数小时')
   if (!port(form.portStart) || !port(form.portEnd) || form.portStart > form.portEnd) throw new Error('宿主机端口范围应在 1–65535 之间，起始端口不能大于结束端口')
   const keys = new Set<string>()
