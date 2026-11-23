@@ -17,7 +17,4 @@ public class ChatStepWriteContext {
     private Long positionId;
     private Long messageId;
     private String runId;
-    private Long pipeInstanceId;
-    private Long pipeStepInstanceId;
-    private String pipeStepCode;
 }

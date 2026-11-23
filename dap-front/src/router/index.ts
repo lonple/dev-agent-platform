@@ -60,10 +60,14 @@ const router = createRouter({
           meta: { permission: 'audit:view', requiresTenant: true },
         },
         {
-          path: 'audit/workflow',
-          name: 'audit-workflow',
-          component: () => import('../views/audit/WorkflowAuditPlaceholder.vue'),
+          path: 'audit/tokens',
+          name: 'audit-tokens',
+          component: () => import('../views/audit/TokenUsageView.vue'),
           meta: { permission: 'audit:view', requiresTenant: true },
+        },
+        {
+          path: 'audit/workflow',
+          redirect: '/audit/tokens',
         },
         {
           path: 'tenant-config/users',
@@ -106,6 +110,25 @@ const router = createRouter({
         {
           path: 'requirement/submit',
           redirect: '/requirement/apply',
+        },
+        {
+          path: 'issues',
+          name: 'issues',
+          component: () => import('../views/issue/IssueListView.vue'),
+          meta: { permission: 'issue:view', requiresTenant: true },
+        },
+        {
+          path: 'requirements/:requirementId/pipeline',
+          name: 'requirement-pipeline',
+          component: () => import('../views/pipeline/PipelineWorkbenchView.vue'),
+          // 从工作台进入，与 workbench 同权；避免无 pipeline:view 时被拦到首页
+          meta: { permission: 'work:access', requiresTenant: true },
+        },
+        {
+          path: 'issues/:issueId/pipeline',
+          name: 'issue-pipeline',
+          component: () => import('../views/pipeline/PipelineWorkbenchView.vue'),
+          meta: { permission: 'work:access', requiresTenant: true },
         },
       ],
     },

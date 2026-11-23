@@ -22,9 +22,6 @@ export interface ChatStepItem {
   status?: string
   durationMs?: number
   occurredAt?: string
-  pipeInstanceId?: number
-  pipeStepInstanceId?: number
-  pipeStepCode?: string
 }
 
 export interface PageResult<T> {
@@ -40,8 +37,6 @@ export function searchChatSteps(params: {
   sessionId?: number
   runId?: string
   messageId?: number
-  pipeInstanceId?: number
-  pipeStepInstanceId?: number
   requirementId?: number
   userId?: number
   taskTypeCode?: string
@@ -53,4 +48,29 @@ export function searchChatSteps(params: {
 
 export function getChatStep(eventId: string) {
   return request.get<any, ChatStepItem>(`/audit/chat-steps/${encodeURIComponent(eventId)}`)
+}
+
+export interface TokenUsageStatItem {
+  userId?: number
+  username?: string
+  requirementId?: number
+  requirementNo?: string
+  requirementName?: string
+  issueId?: number
+  issueNo?: string
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+}
+
+export function listTokenUsageByUser() {
+  return request.get<any, TokenUsageStatItem[]>('/audit/token-usage/by-user')
+}
+
+export function listTokenUsageByRequirementUser() {
+  return request.get<any, TokenUsageStatItem[]>('/audit/token-usage/by-requirement-user')
+}
+
+export function listTokenUsageByIssueUser() {
+  return request.get<any, TokenUsageStatItem[]>('/audit/token-usage/by-issue-user')
 }

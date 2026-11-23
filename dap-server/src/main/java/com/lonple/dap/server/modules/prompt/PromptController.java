@@ -61,6 +61,16 @@ public class PromptController {
         return ApiResponse.ok();
     }
 
+    /**
+     * 初始化流水线默认提示词。
+     * 一般任务：已配置则跳过；AI 初审（REVIEW_PRE / REVIEW_PRE_TECH）会覆盖更新正文。
+     */
+    @PostMapping("/ensure-pre-review")
+    @RequirePermission("prompt:operate")
+    public ApiResponse<Map<String, Object>> ensurePreReview() {
+        return ApiResponse.ok(promptService.ensurePreReviewPrompts());
+    }
+
     private void assertCanView() {
         LoginUser user = UserContext.require();
         if (!user.getPermissions().contains("prompt:view")

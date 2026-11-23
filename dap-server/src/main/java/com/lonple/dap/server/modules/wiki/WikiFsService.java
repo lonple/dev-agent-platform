@@ -3,6 +3,8 @@ package com.lonple.dap.server.modules.wiki;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lonple.dap.server.common.BizException;
 import com.lonple.dap.server.config.DataRootProperties;
+import com.lonple.dap.server.modules.issue.IssueMarkdownImages;
+import com.lonple.dap.server.modules.issue.entity.IssIssue;
 import com.lonple.dap.server.modules.product.entity.SysProduct;
 import com.lonple.dap.server.modules.requirement.entity.ReqRequirement;
 import com.lonple.dap.server.modules.tenant.entity.SysTenant;
@@ -53,6 +55,8 @@ public class WikiFsService {
 
     public static final String DAP_META_DIR = ".dap";
     public static final String MANIFEST_FILE = "manifest.json";
+    public static final String DEFAULT_ISSUE_MARKDOWN_NAME = "问题单.md";
+    private static final String WIKI_TEMPLATE_CLASSPATH = "wiki-templates/";
     public static final String DEFAULT_REQ_MARKDOWN_NAME = "原始需求.md";
 
     private final DataRootProperties dataRootProperties;
@@ -62,6 +66,7 @@ public class WikiFsService {
     private final SysWorkspaceNodeMapper workspaceNodeMapper;
     private final WorkspaceFsService workspaceFsService;
     private final ObjectMapper objectMapper;
+    private final IssueMarkdownImages issueMarkdownImages;
 
     private final ConcurrentHashMap<Long, Object> manifestLocks = new ConcurrentHashMap<>();
 
@@ -145,7 +150,7 @@ public class WikiFsService {
     }
 
     /**
-     * 创建文本文件：允许 .md / .html；无扩展名默认 .md。
+     * 创建文本文件：允许 .md / .html / .json；无扩展名默认 .md。
      * Wiki「新建」UI 仍只建 md；html 来自上传或 Agent 写入。
      */
     @Transactional
@@ -205,7 +210,7 @@ public class WikiFsService {
         scheduleRewriteManifest(tenantId);
     }
 
-    /** 将个人工作空间中的文件发布到 Wiki 指定目录 */
+    /** 将个人工作空间中的文件发布到 Wiki 指定目录（同名则覆盖） */
     @Transactional
     public Long publishFromPersonal(Long sourceWorkspaceId, Long sourceNodeId, Long targetParentId) {
         Long tenantId = TenantSupport.requireTenantId();
@@ -226,7 +231,6 @@ public class WikiFsService {
         ensureWikiRoot(tenantId);
         Long parent = resolveParentDirId(tenantId, targetParentId);
         String displayName = src.getDisplayName();
-        assertDisplayUnique(tenantId, parent, displayName);
 
         String content;
         try {
@@ -236,6 +240,12 @@ public class WikiFsService {
             throw e;
         } catch (Exception e) {
             throw new BizException("读取源文件失败");
+        }
+
+        SysWikiNode existing = findChildFile(parent, displayName);
+        if (existing != null) {
+            updateFileContent(existing.getId(), content);
+            return existing.getId();
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -284,18 +294,19 @@ public class WikiFsService {
     }
 
     /**
-     * 投入研发：在产品目录下写入「需求编号/原始需求.md」。
+     * 投入研发：在「{产品}/原始需求/{需求编号}/」写入「原始需求.md」（不再建产品下直属需求目录）。
      * @return 需求目录节点 ID
      */
     @Transactional
     public Long ensureRequirementArtifacts(SysProduct product, ReqRequirement requirement) {
-        if (requirement == null || !StringUtils.hasText(requirement.getReqNo())) {
+        if (product == null || requirement == null || !StringUtils.hasText(requirement.getReqNo())) {
             throw new BizException("需求尚未生成编号");
         }
-        Long productDirId = product.getWikiNodeId() != null
-                ? product.getWikiNodeId()
-                : ensureProductDir(product);
-        return ensureRequirementDir(productDirId, requirement);
+        if (product.getWikiNodeId() == null) {
+            Long productDirId = ensureProductDir(product);
+            product.setWikiNodeId(productDirId);
+        }
+        return ensureRawRequirementPublishDir(product, requirement);
     }
 
     /** 在指定 Wiki 父目录下确保「需求编号」目录及原始需求.md，返回需求目录 ID */
@@ -349,6 +360,22 @@ public class WikiFsService {
         return wikiNodeMapper.selectList(q);
     }
 
+    /** 列出目录下子目录 */
+    public List<SysWikiNode> listChildDirs(Long parentId) {
+        Long tenantId = TenantSupport.requireTenantId();
+        LambdaQueryWrapper<SysWikiNode> q = new LambdaQueryWrapper<SysWikiNode>()
+                .eq(SysWikiNode::getTenantId, tenantId)
+                .eq(SysWikiNode::getNodeType, WorkspaceNodeType.DIR.name())
+                .orderByAsc(SysWikiNode::getDisplayName)
+                .orderByAsc(SysWikiNode::getId);
+        if (parentId == null) {
+            q.isNull(SysWikiNode::getParentId);
+        } else {
+            q.eq(SysWikiNode::getParentId, parentId);
+        }
+        return wikiNodeMapper.selectList(q);
+    }
+
     /** 在指定目录下查找同名文件（不存在返回 null）；无扩展名时按 .md 查找 */
     public SysWikiNode findChildFile(Long parentId, String displayName) {
         Long tenantId = TenantSupport.requireTenantId();
@@ -374,7 +401,7 @@ public class WikiFsService {
         return wikiNodeMapper.selectOne(q);
     }
 
-    /** 创建或覆盖同名 .md/.html；返回文件节点 ID */
+    /** 创建或覆盖同名 .md/.html/.json；返回文件节点 ID */
     @Transactional
     public Long upsertMarkdownFile(Long parentId, String displayName, String content) {
         return upsertTextFile(parentId, displayName, content).id();
@@ -416,6 +443,435 @@ public class WikiFsService {
             return null;
         }
         return findChildDir(tenantId, null, displayName.trim());
+    }
+
+    /** 查找子目录（不存在返回 null） */
+    public SysWikiNode findChildDirectory(Long parentId, String displayName) {
+        Long tenantId = TenantSupport.requireTenantId();
+        if (!StringUtils.hasText(displayName)) {
+            return null;
+        }
+        return findChildDir(tenantId, parentId, displayName.trim());
+    }
+
+    /** 确保子目录存在，返回目录节点 ID */
+    @Transactional
+    public Long ensureChildDir(Long parentId, String displayName) {
+        SysWikiNode existing = findChildDirectory(parentId, displayName);
+        if (existing != null) {
+            return existing.getId();
+        }
+        return createDirectory(parentId, displayName);
+    }
+
+    /**
+     * 将目录节点挂到新父目录下（更新 parentId + 磁盘目录搬迁）。
+     * 子节点 storageName 不变，随父目录一起移动；节点 ID 保持不变。
+     * @return 被移动的目录节点 ID
+     */
+    @Transactional
+    public Long moveDirectory(Long dirNodeId, Long newParentId) {
+        SysWikiNode dir = requireNode(dirNodeId);
+        if (!WorkspaceNodeType.DIR.name().equals(dir.getNodeType())) {
+            throw new BizException("只能移动目录");
+        }
+        if (Objects.equals(dir.getParentId(), newParentId)) {
+            return dir.getId();
+        }
+        if (isSelfOrDescendant(requireNode(newParentId), dir.getId())) {
+            throw new BizException("不能将目录移动到自身或其子目录下");
+        }
+        Long tenantId = dir.getTenantId();
+        Long parent = resolveParentDirId(tenantId, newParentId);
+        SysWikiNode clash = findChildDir(tenantId, parent, dir.getDisplayName());
+        if (clash != null && !Objects.equals(clash.getId(), dir.getId())) {
+            throw new BizException("目标位置已存在同名目录：" + dir.getDisplayName());
+        }
+
+        Path oldPath = resolveNodePath(dir);
+        dir.setParentId(parent);
+        dir.setUpdatedAt(LocalDateTime.now());
+        wikiNodeMapper.updateById(dir);
+        Path newPath = resolveNodePath(dir);
+        try {
+            Files.createDirectories(newPath.getParent());
+            if (Files.exists(oldPath)) {
+                if (Files.exists(newPath)) {
+                    throw new BizException("目标磁盘路径已存在，无法移动");
+                }
+                try {
+                    Files.move(oldPath, newPath, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(oldPath, newPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } else {
+                Files.createDirectories(newPath);
+            }
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException("移动 Wiki 目录失败：" + e.getMessage());
+        }
+        scheduleRewriteManifest(tenantId);
+        return dir.getId();
+    }
+
+    /**
+     * 二审选定计划版本后：在产品下创建「版本号」目录，
+     * 将产品下的「需求编号」目录迁入版本下；并把「原始需求/{需求}」中的文件合并进去。
+     * @return 版本下的需求目录节点 ID
+     */
+    @Transactional
+    public Long promoteRequirementFolderToVersion(
+            SysProduct product, ReqRequirement requirement, String planVersion) {
+        if (product == null || product.getWikiNodeId() == null || requirement == null
+                || !StringUtils.hasText(requirement.getReqNo()) || !StringUtils.hasText(planVersion)) {
+            throw new BizException("产品/需求/计划版本无效，无法迁移 Wiki 目录");
+        }
+        Long productDirId = product.getWikiNodeId();
+        String reqNo = requirement.getReqNo().trim();
+        String version = planVersion.trim();
+
+        Long versionDirId = ensureChildDir(productDirId, version);
+        SysWikiNode underVersion = findChildDirectory(versionDirId, reqNo);
+        SysWikiNode underProduct = findChildDirectory(productDirId, reqNo);
+
+        Long targetReqDirId;
+        if (underVersion != null) {
+            targetReqDirId = underVersion.getId();
+            // 若产品下仍有同名需求目录，合并后删除源目录
+            if (underProduct != null && !Objects.equals(underProduct.getId(), underVersion.getId())) {
+                mergeDirectoryContents(underProduct.getId(), targetReqDirId);
+                deleteNodeRecursive(underProduct);
+                scheduleRewriteManifest(product.getTenantId());
+            }
+        } else if (underProduct != null) {
+            targetReqDirId = moveDirectory(underProduct.getId(), versionDirId);
+        } else {
+            targetReqDirId = ensureChildDir(versionDirId, reqNo);
+        }
+
+        // 合并 AI 初审目录 原始需求/{需求} → 版本/{需求}
+        SysWikiNode rawRoot = findChildDirectory(productDirId, "原始需求");
+        if (rawRoot != null) {
+            SysWikiNode rawReq = findChildDirectory(rawRoot.getId(), reqNo);
+            if (rawReq != null && !Objects.equals(rawReq.getId(), targetReqDirId)) {
+                mergeDirectoryContents(rawReq.getId(), targetReqDirId);
+                deleteNodeRecursive(rawReq);
+                scheduleRewriteManifest(product.getTenantId());
+            }
+        }
+
+        // 保证有原始需求.md
+        if (findChildFile(targetReqDirId, DEFAULT_REQ_MARKDOWN_NAME) == null) {
+            createMarkdownFile(targetReqDirId, DEFAULT_REQ_MARKDOWN_NAME, buildRequirementMarkdown(requirement));
+        }
+        return targetReqDirId;
+    }
+
+    /** 将 sourceDir 下直接子节点合并到 targetDir（同名文件跳过已存在；同名目录递归合并） */
+    @Transactional
+    public void mergeDirectoryContents(Long sourceDirId, Long targetDirId) {
+        if (sourceDirId == null || targetDirId == null || Objects.equals(sourceDirId, targetDirId)) {
+            return;
+        }
+        requireNode(sourceDirId);
+        requireNode(targetDirId);
+        Long tenantId = TenantSupport.requireTenantId();
+        List<SysWikiNode> children = wikiNodeMapper.selectList(new LambdaQueryWrapper<SysWikiNode>()
+                .eq(SysWikiNode::getTenantId, tenantId)
+                .eq(SysWikiNode::getParentId, sourceDirId));
+        for (SysWikiNode child : children) {
+            if (WorkspaceNodeType.DIR.name().equals(child.getNodeType())) {
+                SysWikiNode existing = findChildDirectory(targetDirId, child.getDisplayName());
+                if (existing != null) {
+                    mergeDirectoryContents(child.getId(), existing.getId());
+                    deleteNodeRecursive(child);
+                } else {
+                    moveDirectory(child.getId(), targetDirId);
+                }
+            } else {
+                SysWikiNode existing = findChildFile(targetDirId, child.getDisplayName());
+                if (existing != null) {
+                    // 目标已有同名文件：保留目标，删除源
+                    deleteNodeRecursive(child);
+                } else {
+                    moveFileNode(child.getId(), targetDirId);
+                }
+            }
+        }
+    }
+
+    @Transactional
+    public Long moveFileNode(Long fileNodeId, Long newParentId) {
+        SysWikiNode file = requireNode(fileNodeId);
+        if (!WorkspaceNodeType.FILE.name().equals(file.getNodeType())) {
+            throw new BizException("只能移动文件");
+        }
+        if (Objects.equals(file.getParentId(), newParentId)) {
+            return file.getId();
+        }
+        Long tenantId = file.getTenantId();
+        Long parent = resolveParentDirId(tenantId, newParentId);
+        if (findChildFile(parent, file.getDisplayName()) != null) {
+            throw new BizException("目标位置已存在同名文件：" + file.getDisplayName());
+        }
+        Path oldPath = resolveNodePath(file);
+        file.setParentId(parent);
+        file.setUpdatedAt(LocalDateTime.now());
+        wikiNodeMapper.updateById(file);
+        Path newPath = resolveNodePath(file);
+        try {
+            Files.createDirectories(newPath.getParent());
+            if (Files.exists(oldPath)) {
+                try {
+                    Files.move(oldPath, newPath, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(oldPath, newPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        } catch (Exception e) {
+            throw new BizException("移动 Wiki 文件失败：" + e.getMessage());
+        }
+        scheduleRewriteManifest(tenantId);
+        return file.getId();
+    }
+
+    /** 收集目录自身及全部子孙节点 ID */
+    public List<Long> listSubtreeNodeIds(Long rootDirId) {
+        List<Long> ids = new ArrayList<>();
+        if (rootDirId == null) {
+            return ids;
+        }
+        collectSubtree(rootDirId, ids);
+        return ids;
+    }
+
+    private void collectSubtree(Long nodeId, List<Long> out) {
+        out.add(nodeId);
+        Long tenantId = TenantSupport.requireTenantId();
+        List<SysWikiNode> children = wikiNodeMapper.selectList(new LambdaQueryWrapper<SysWikiNode>()
+                .eq(SysWikiNode::getTenantId, tenantId)
+                .eq(SysWikiNode::getParentId, nodeId));
+        for (SysWikiNode c : children) {
+            if (WorkspaceNodeType.DIR.name().equals(c.getNodeType())) {
+                collectSubtree(c.getId(), out);
+            } else {
+                out.add(c.getId());
+            }
+        }
+    }
+
+    /**
+     * AI 初审发布/输入根：`{产品}/原始需求/{需求编号}`。
+     * 若不存在则创建；若仍存在旧布局「{产品}/{需求编号}」则合并进来并删除旧目录。
+     */
+    @Transactional
+    public Long ensureRawRequirementPublishDir(SysProduct product, ReqRequirement requirement) {
+        if (product == null || product.getWikiNodeId() == null || requirement == null
+                || !StringUtils.hasText(requirement.getReqNo())) {
+            throw new BizException("产品 Wiki 或需求编号无效，无法解析原始需求目录");
+        }
+        Long productDirId = product.getWikiNodeId();
+        String reqNo = requirement.getReqNo().trim();
+        Long rawRoot = ensureChildDir(productDirId, "原始需求");
+        Long reqDir = ensureChildDir(rawRoot, reqNo);
+        ensureRawRequirementFile(product, requirement, reqDir);
+        // 清掉旧布局：产品下直属「需求编号」目录（历史投入研发/打开文档误建）
+        migrateAndRemoveLegacyProductReqDir(product, reqNo, reqDir);
+        return reqDir;
+    }
+
+    /**
+     * 将「{产品}/{需求编号}」内容合并到「{产品}/原始需求/{需求编号}」后删除旧目录。
+     * 注意：不得误删「原始需求」「归档」等固定目录。
+     */
+    private void migrateAndRemoveLegacyProductReqDir(SysProduct product, String reqNo, Long targetReqDirId) {
+        if (product.getWikiNodeId() == null || !StringUtils.hasText(reqNo) || targetReqDirId == null) {
+            return;
+        }
+        if ("原始需求".equals(reqNo) || "归档".equals(reqNo) || "模板".equals(reqNo) || "规范".equals(reqNo)) {
+            return;
+        }
+        SysWikiNode legacy = findChildDirectory(product.getWikiNodeId(), reqNo);
+        if (legacy == null || Objects.equals(legacy.getId(), targetReqDirId)) {
+            return;
+        }
+        // 防御：旧目录若其实挂在「原始需求」下则不是旧布局
+        if (legacy.getParentId() != null && !Objects.equals(legacy.getParentId(), product.getWikiNodeId())) {
+            return;
+        }
+        try {
+            mergeDirectoryContents(legacy.getId(), targetReqDirId);
+            deleteNodeRecursive(legacy);
+            scheduleRewriteManifest(product.getTenantId());
+            log.info("removed legacy wiki dir product/{}/ → 原始需求/{}/", reqNo, reqNo);
+        } catch (Exception e) {
+            log.warn("migrate legacy product/{} failed: {}", reqNo, e.getMessage());
+        }
+    }
+
+    /**
+     * 问题单发布根：`{产品}/issues/{问题单号}`。
+     */
+    @Transactional
+    public Long ensureIssuePublishDir(SysProduct product, String issueNo) {
+        if (product == null || product.getWikiNodeId() == null || !StringUtils.hasText(issueNo)) {
+            throw new BizException("产品 Wiki 或问题单编号无效，无法解析问题发布目录");
+        }
+        Long issuesRoot = ensureChildDir(product.getWikiNodeId(), "issues");
+        return ensureChildDir(issuesRoot, issueNo.trim());
+    }
+
+    /**
+     * 在问题发布目录写入/刷新「问题单.md」（描述、实现步骤含图片 Markdown、预期结果、已有方案）。
+     */
+    @Transactional
+    public Long ensureIssueTicketMarkdown(SysProduct product, IssIssue issue) {
+        if (product == null || issue == null || !StringUtils.hasText(issue.getIssueNo())) {
+            throw new BizException("问题单无效，无法写入问题单.md");
+        }
+        if (product.getWikiNodeId() == null) {
+            Long productDirId = ensureProductDir(product);
+            product.setWikiNodeId(productDirId);
+        }
+        Long issueDirId = ensureIssuePublishDir(product, issue.getIssueNo());
+        upsertMarkdownFile(issueDirId, DEFAULT_ISSUE_MARKDOWN_NAME, buildIssueMarkdown(issue));
+        return issueDirId;
+    }
+
+    /**
+     * 确保 Wiki「模板」下存在指定模板文件；缺失时从 classpath {@code wiki-templates/} 种子写入。
+     * @return 模板文件节点 ID
+     */
+    @Transactional
+    public Long ensureBuiltinTemplateFile(String fileName) {
+        if (!StringUtils.hasText(fileName)) {
+            throw new BizException("模板文件名无效");
+        }
+        String name = fileName.trim();
+        Long tenantId = TenantSupport.requireTenantId();
+        SysWikiNode tplRoot = findTopLevelDir(tenantId, "模板");
+        if (tplRoot == null) {
+            Long rootId = createDirectory(null, "模板");
+            tplRoot = requireNode(rootId);
+        }
+        SysWikiNode existing = findChildFile(tplRoot.getId(), name);
+        if (existing != null) {
+            return existing.getId();
+        }
+        for (SysWikiNode dir : listChildDirs(tplRoot.getId())) {
+            SysWikiNode nested = findChildFile(dir.getId(), name);
+            if (nested != null) {
+                return nested.getId();
+            }
+        }
+        String body = loadClasspathWikiTemplate(name);
+        if (!StringUtils.hasText(body)) {
+            throw new BizException("未找到输出参考模板：" + name + "（Wiki 与 classpath 种子均无）");
+        }
+        return createMarkdownFile(tplRoot.getId(), name, body);
+    }
+
+    private String loadClasspathWikiTemplate(String fileName) {
+        String resource = WIKI_TEMPLATE_CLASSPATH + fileName;
+        try (var in = WikiFsService.class.getClassLoader().getResourceAsStream(resource)) {
+            if (in == null) {
+                return null;
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.warn("读取 classpath 模板失败 {}: {}", resource, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 自 gen_prd 起发布/输入根：`{产品}/{计划版本号}/{需求编号}`。
+     */
+    @Transactional
+    public Long ensureVersionRequirementPublishDir(
+            SysProduct product, String planVersion, ReqRequirement requirement) {
+        if (product == null || product.getWikiNodeId() == null || requirement == null
+                || !StringUtils.hasText(requirement.getReqNo())) {
+            throw new BizException("产品 Wiki 或需求编号无效，无法解析版本需求目录");
+        }
+        if (!StringUtils.hasText(planVersion)) {
+            throw new BizException("缺少计划版本号，无法解析发布目录");
+        }
+        Long verRoot = ensureChildDir(product.getWikiNodeId(), planVersion.trim());
+        Long reqDir = ensureChildDir(verRoot, requirement.getReqNo().trim());
+        // 首次进入版本目录时，把原始需求.md 从初审目录迁入（若尚无）
+        if (findChildFile(reqDir, DEFAULT_REQ_MARKDOWN_NAME) == null) {
+            Long rawDir = ensureRawRequirementPublishDir(product, requirement);
+            SysWikiNode rawFile = findChildFile(rawDir, DEFAULT_REQ_MARKDOWN_NAME);
+            if (rawFile != null) {
+                try {
+                    String body = Files.readString(resolveNodePath(rawFile), StandardCharsets.UTF_8);
+                    upsertMarkdownFile(reqDir, DEFAULT_REQ_MARKDOWN_NAME, body);
+                } catch (Exception e) {
+                    log.warn("复制原始需求到版本目录失败: {}", e.getMessage());
+                }
+            }
+        }
+        return reqDir;
+    }
+
+    private void ensureRawRequirementFile(SysProduct product, ReqRequirement requirement, Long rawReqDir) {
+        if (findChildFile(rawReqDir, DEFAULT_REQ_MARKDOWN_NAME) != null) {
+            return;
+        }
+        // 兼容旧布局：{产品}/{需求编号}/原始需求.md
+        SysWikiNode legacyDir = findChildDirectory(product.getWikiNodeId(), requirement.getReqNo().trim());
+        if (legacyDir != null) {
+            SysWikiNode legacyFile = findChildFile(legacyDir.getId(), DEFAULT_REQ_MARKDOWN_NAME);
+            if (legacyFile != null) {
+                try {
+                    String body = Files.readString(resolveNodePath(legacyFile), StandardCharsets.UTF_8);
+                    upsertMarkdownFile(rawReqDir, DEFAULT_REQ_MARKDOWN_NAME, body);
+                    return;
+                } catch (Exception e) {
+                    log.warn("从旧路径回填原始需求失败: {}", e.getMessage());
+                }
+            }
+        }
+        createMarkdownFile(rawReqDir, DEFAULT_REQ_MARKDOWN_NAME, buildRequirementMarkdown(requirement));
+    }
+
+    /** 按相对路径段确保目录：如 归档/需求 → 相对 product 根 */
+    @Transactional
+    public Long ensureDirByRelativePath(Long rootDirId, String relativePath) {
+        if (rootDirId == null || !StringUtils.hasText(relativePath)) {
+            return rootDirId;
+        }
+        Long cur = rootDirId;
+        for (String part : relativePath.replace('\\', '/').split("/")) {
+            if (!StringUtils.hasText(part) || ".".equals(part)) {
+                continue;
+            }
+            cur = ensureChildDir(cur, part.trim());
+        }
+        return cur;
+    }
+
+    /** 查找上下文目录（不自动创建）；relative 相对产品 Wiki 根 */
+    public SysWikiNode findDirByRelativePath(Long rootDirId, String relativePath) {
+        if (rootDirId == null || !StringUtils.hasText(relativePath)) {
+            return rootDirId == null ? null : wikiNodeMapper.selectById(rootDirId);
+        }
+        Long cur = rootDirId;
+        SysWikiNode node = null;
+        for (String part : relativePath.replace('\\', '/').split("/")) {
+            if (!StringUtils.hasText(part) || ".".equals(part)) {
+                continue;
+            }
+            node = findChildDirectory(cur, part.trim());
+            if (node == null) {
+                return null;
+            }
+            cur = node.getId();
+        }
+        return node;
     }
 
     /** 判断节点是否为 ancestor 自身或其子孙 */
@@ -557,7 +1013,7 @@ public class WikiFsService {
         return name;
     }
 
-    /** 允许 .md / .html / .htm；其它扩展名拒绝；无扩展名默认 .md */
+    /** 允许 .md / .html / .htm / .json；其它扩展名拒绝；无扩展名默认 .md */
     private String normalizeTextFileName(String displayName) {
         if (!StringUtils.hasText(displayName)) {
             throw new BizException("请输入名称");
@@ -567,11 +1023,14 @@ public class WikiFsService {
             throw new BizException("名称非法");
         }
         String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(".md") || lower.endsWith(".html") || lower.endsWith(".htm")) {
+        if (lower.endsWith(".md")
+                || lower.endsWith(".html")
+                || lower.endsWith(".htm")
+                || lower.endsWith(".json")) {
             return name;
         }
         if (name.contains(".")) {
-            throw new BizException("仅支持 .md 或 .html 文件：" + name);
+            throw new BizException("仅支持 .md / .html / .json 文件：" + name);
         }
         return name + ".md";
     }
@@ -606,6 +1065,40 @@ public class WikiFsService {
             sb.append("（无描述）\n");
         }
         return sb.toString();
+    }
+
+    private String buildIssueMarkdown(IssIssue issue) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# 问题单\n\n");
+        sb.append("- 问题单号：").append(nullToEmpty(issue.getIssueNo())).append('\n');
+        sb.append("- 状态：").append(nullToEmpty(issue.getStatus())).append('\n');
+        if (issue.getRequirementId() != null) {
+            sb.append("- 关联需求 ID：").append(issue.getRequirementId()).append('\n');
+        }
+        sb.append('\n');
+        sb.append("> 截图按全文出现顺序标记为【附图N】（可带｜说明）；人看下方原图，模型看同号多模态附图。\n\n");
+        sb.append("---\n\n");
+        int[] imgSeq = {1};
+        sb.append("## 问题描述\n\n");
+        appendSectionBody(sb, issueMarkdownImages.annotateForWiki(issue.getDescription(), imgSeq));
+        sb.append("\n## 实现步骤\n\n");
+        appendSectionBody(sb, issueMarkdownImages.annotateForWiki(issue.getSteps(), imgSeq));
+        sb.append("\n## 预期结果\n\n");
+        appendSectionBody(sb, issueMarkdownImages.annotateForWiki(issue.getExpectedResult(), imgSeq));
+        sb.append("\n## 已有解决方案摘要\n\n");
+        appendSectionBody(sb, issueMarkdownImages.annotateForWiki(issue.getSolution(), imgSeq));
+        return sb.toString();
+    }
+
+    private void appendSectionBody(StringBuilder sb, String body) {
+        if (StringUtils.hasText(body)) {
+            sb.append(body.trim());
+            if (!body.trim().endsWith("\n")) {
+                sb.append('\n');
+            }
+        } else {
+            sb.append("（无）\n");
+        }
     }
 
     private String nullToEmpty(String s) {

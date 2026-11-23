@@ -5,7 +5,8 @@ public enum RequirementFlowNodeType {
     APPROVE("审批通过"),
     REJECT("驳回"),
     PLAN("提交计划"),
-    DEVELOP("投入研发");
+    DEVELOP("投入研发"),
+    COMPLETE("完成");
 
     private final String label;
 

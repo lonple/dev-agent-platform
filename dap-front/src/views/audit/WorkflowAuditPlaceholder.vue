@@ -3,7 +3,7 @@
 <template>
   <div class="page">
     <h2>工作流</h2>
-    <p class="hint">自动化流水线编排步骤审计即将接入；当前会话内 AI 步骤请在「会话日志」按流水线实例筛选。</p>
+    <p class="hint">编排审计暂未接入；会话内 AI 步骤请在「会话日志」查看。</p>
   </div>
 </template>
 

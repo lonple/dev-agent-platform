@@ -106,6 +106,13 @@ public class RequirementController {
         return ApiResponse.ok();
     }
 
+    @PostMapping("/{id}/complete")
+    @RequirePermission("work:access")
+    public ApiResponse<Void> complete(@PathVariable Long id) {
+        requirementService.complete(id);
+        return ApiResponse.ok();
+    }
+
     @PostMapping("/{id}/handlers")
     @RequirePermission("work:access")
     public ApiResponse<Void> addHandlers(

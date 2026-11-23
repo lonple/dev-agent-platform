@@ -80,7 +80,12 @@ public class ChatStepEsService {
             criteria = criteria.and(new Criteria("runId").is(runId.trim()));
         }
         CriteriaQuery query = new CriteriaQuery(criteria);
-        query.setPageable(PageRequest.of(0, 500, Sort.by(Sort.Direction.ASC, "seq")));
+        // 多轮 run 并存时不能只按 seq（每轮都会从 1 重计）。
+        // 长跑可超 500 步：取**最近** 500 条再按时间正序，避免 UI 只看到前 95 轮。
+        query.setPageable(PageRequest.of(
+                0,
+                500,
+                Sort.by(Sort.Direction.DESC, "occurredAt").and(Sort.by(Sort.Direction.DESC, "seq"))));
         if (!includeDetail) {
             query.addSourceFilter(new FetchSourceFilterBuilder().withExcludes("detail").build());
         }
@@ -91,6 +96,7 @@ public class ChatStepEsService {
             for (SearchHit<ChatStepDocument> hit : hits) {
                 out.add(hit.getContent());
             }
+            java.util.Collections.reverse(out);
             return out;
         } catch (Exception ex) {
             if (isIndexMissing(ex)) {
@@ -110,8 +116,6 @@ public class ChatStepEsService {
             Long sessionId,
             String runId,
             Long messageId,
-            Long pipeInstanceId,
-            Long pipeStepInstanceId,
             Long requirementId,
             Long userId,
             String taskTypeCode,
@@ -134,12 +138,6 @@ public class ChatStepEsService {
         }
         if (messageId != null) {
             criteria = criteria.and(new Criteria("messageId").is(messageId));
-        }
-        if (pipeInstanceId != null) {
-            criteria = criteria.and(new Criteria("pipeInstanceId").is(pipeInstanceId));
-        }
-        if (pipeStepInstanceId != null) {
-            criteria = criteria.and(new Criteria("pipeStepInstanceId").is(pipeStepInstanceId));
         }
         if (requirementId != null) {
             criteria = criteria.and(new Criteria("requirementId").is(requirementId));

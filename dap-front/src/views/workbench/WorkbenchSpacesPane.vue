@@ -61,12 +61,16 @@ const activeWorkspaceId = ref<number | null>(null)
 const activeSessionId = ref<number | null>(null)
 const sessionsByWs = ref<Record<number, WorkspaceSessionItem[]>>({})
 const loadingList = ref(false)
+/** 各工作空间下的会话列表：默认收起，点击工作空间行展开/收起 */
+const expandedWorkspaceIds = ref<Set<number>>(new Set())
 
 const fileTree = ref<WorkspaceNodeItem[]>([])
 const loadingTree = ref(false)
 const selectedDirId = ref<number | null>(null)
 const loadingFile = ref(false)
 const savingFile = ref(false)
+/** 用于 remount 树，使 default-expanded-keys 在刷新后生效 */
+const fileTreeVersion = ref(0)
 
 /** 中间顶栏：会话 Tab 与文档 Tab 同级 */
 type CenterSessionTab = {
@@ -128,6 +132,26 @@ const draggingSide = ref<'left' | 'right' | null>(null)
 const activeWorkspace = computed(
   () => personalWorkspaces.value.find((w) => w.id === activeWorkspaceId.value) ?? null,
 )
+/** 默认展开一级目录，露出二级；更深层级保持收起 */
+const fileTreeExpandedKeys = computed(() =>
+  fileTree.value.filter((n) => n.nodeType === 'DIR').map((n) => n.id),
+)
+
+function isWorkspaceExpanded(id: number) {
+  return expandedWorkspaceIds.value.has(id)
+}
+
+function setWorkspaceExpanded(id: number, open: boolean) {
+  const next = new Set(expandedWorkspaceIds.value)
+  if (open) next.add(id)
+  else next.delete(id)
+  expandedWorkspaceIds.value = next
+}
+
+function toggleWorkspaceExpand(id: number) {
+  setWorkspaceExpanded(id, !isWorkspaceExpanded(id))
+}
+
 const activeCenterTab = computed(
   () => centerTabs.value.find((t) => t.key === activeCenterTabKey.value) ?? null,
 )
@@ -309,7 +333,12 @@ const sessionTaskTypesByKind = computed(() => {
 
 function showCodeReposForTaskCode(code: string | null | undefined) {
   const c = (code || '').trim().toUpperCase()
-  return c === 'GEN_CODING' || c === 'GEN_INT_TEST'
+  return (
+    c === 'GEN_CODING' ||
+    c === 'GEN_INT_TEST' ||
+    c === 'GEN_DETAIL' ||
+    c === 'GEN_CASES'
+  )
 }
 
 const codeReposRequired = computed(() => {
@@ -482,22 +511,32 @@ async function loadSessions(workspaceId: number) {
 async function refreshFileTree() {
   if (activeWorkspaceId.value == null) {
     fileTree.value = []
+    fileTreeVersion.value += 1
     return
   }
   loadingTree.value = true
   try {
     fileTree.value = await listWorkbenchWorkspaceTree(activeWorkspaceId.value)
+    fileTreeVersion.value += 1
   } catch (e) {
     fileTree.value = []
+    fileTreeVersion.value += 1
     ElMessage.error(e instanceof Error ? e.message : '加载目录失败')
   } finally {
     loadingTree.value = false
   }
 }
 
-function selectWorkspace(ws: TenantWorkspaceItem) {
+/** @param toggleExpand 点击行时切换会话列表；初始化选中空间时传 false 保持收起 */
+function selectWorkspace(ws: TenantWorkspaceItem, toggleExpand = true) {
+  const same = activeWorkspaceId.value === ws.id
   activeWorkspaceId.value = ws.id
+  activeSessionId.value = null
   selectedDirId.value = null
+  if (toggleExpand) {
+    if (same) toggleWorkspaceExpand(ws.id)
+    else setWorkspaceExpanded(ws.id, true)
+  }
   void refreshFileTree()
 }
 
@@ -538,6 +577,7 @@ function openSessionTab(ws: TenantWorkspaceItem, session: WorkspaceSessionItem) 
 }
 
 function selectSession(ws: TenantWorkspaceItem, session: WorkspaceSessionItem) {
+  setWorkspaceExpanded(ws.id, true)
   openSessionTab(ws, session)
 }
 
@@ -1062,7 +1102,7 @@ async function submitSession() {
     }
   }
   if (codeReposRequired.value && collectCodeRepos().length === 0) {
-    ElMessage.warning('编码/自动化测试任务请至少填写一个本地代码仓库地址')
+    ElMessage.warning('该任务类型请至少填写一个本地代码仓库地址')
     return
   }
   sessionSubmitting.value = true
@@ -1312,7 +1352,7 @@ async function stopChat() {
 onMounted(() => {
   void refreshWorkspaces().then(() => {
     const first = personalWorkspaces.value[0]
-    if (first) selectWorkspace(first)
+    if (first) selectWorkspace(first, false)
   })
 })
 </script>
@@ -1321,7 +1361,7 @@ onMounted(() => {
   <div class="spaces">
     <aside class="col left" :style="{ width: leftWidth + 'px' }">
       <div class="pane-hd">
-        <span class="pos-label">工作空间</span>
+        <span class="pos-label">工作目录</span>
         <el-button
           class="icon-btn"
           text
@@ -1336,9 +1376,15 @@ onMounted(() => {
           v-for="ws in personalWorkspaces"
           :key="ws.id"
           class="ws-block"
-          :class="{ active: ws.id === activeWorkspaceId && activeSessionId == null }"
+          :class="{
+            active: ws.id === activeWorkspaceId && activeSessionId == null,
+            open: isWorkspaceExpanded(ws.id),
+          }"
         >
           <div class="ws-row" @click="selectWorkspace(ws)">
+            <el-icon class="ws-chevron" :class="{ open: isWorkspaceExpanded(ws.id) }">
+              <ArrowRight />
+            </el-icon>
             <el-icon><Folder /></el-icon>
             <span class="ws-name">{{ ws.name }}</span>
             <el-dropdown
@@ -1359,35 +1405,37 @@ onMounted(() => {
               </template>
             </el-dropdown>
           </div>
-          <div
-            v-for="s in sessionsByWs[ws.id] || []"
-            :key="s.id"
-            class="session-row"
-            :class="{ active: s.id === activeSessionId }"
-            @click.stop="selectSession(ws, s)"
-          >
-            <el-icon :title="s.sessionType === 'TASK' ? '任务会话' : '普通会话'">
-              <List v-if="s.sessionType === 'TASK'" />
-              <ChatDotRound v-else />
-            </el-icon>
-            <span class="session-title">{{ s.title }}</span>
-            <el-dropdown
-              class="row-actions"
-              trigger="click"
-              @command="(c: string) => (c === 'edit' ? openEditSession(ws, s) : removeSession(ws, s))"
-              @click.stop
+          <template v-if="isWorkspaceExpanded(ws.id)">
+            <div
+              v-for="s in sessionsByWs[ws.id] || []"
+              :key="s.id"
+              class="session-row"
+              :class="{ active: s.id === activeSessionId }"
+              @click.stop="selectSession(ws, s)"
             >
-              <button type="button" class="more-btn" title="更多" @click.stop>
-                <el-icon class="more-v"><MoreFilled /></el-icon>
-              </button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
+              <el-icon :title="s.sessionType === 'TASK' ? '任务会话' : '普通会话'">
+                <List v-if="s.sessionType === 'TASK'" />
+                <ChatDotRound v-else />
+              </el-icon>
+              <span class="session-title">{{ s.title }}</span>
+              <el-dropdown
+                class="row-actions"
+                trigger="click"
+                @command="(c: string) => (c === 'edit' ? openEditSession(ws, s) : removeSession(ws, s))"
+                @click.stop
+              >
+                <button type="button" class="more-btn" title="更多" @click.stop>
+                  <el-icon class="more-v"><MoreFilled /></el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </template>
         </div>
 
         <div v-if="!personalWorkspaces.length" class="empty">暂无个人空间</div>
@@ -1561,7 +1609,10 @@ onMounted(() => {
 
     <aside class="col right" :style="{ width: rightWidth + 'px' }">
       <div class="pane-hd">
-        <span class="title">文件</span>
+        <span class="title">
+          文件
+          <span v-if="activeWorkspace" class="title-ws">· {{ activeWorkspace.name }}</span>
+        </span>
         <el-button
           class="icon-btn"
           text
@@ -1572,10 +1623,11 @@ onMounted(() => {
       </div>
       <div class="right-body" v-loading="loadingTree || loadingFile">
         <el-tree
+          :key="`ft-${activeWorkspaceId}-${fileTreeVersion}`"
           class="file-tree"
           :data="fileTree"
           node-key="id"
-          default-expand-all
+          :default-expanded-keys="fileTreeExpandedKeys"
           highlight-current
           :current-node-key="selectedDirId ?? undefined"
           :props="{ label: 'displayName', children: 'children' }"
@@ -2119,6 +2171,15 @@ onMounted(() => {
 .title {
   font-weight: 600;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title-ws {
+  font-weight: 400;
+  color: var(--dap-gray-500);
+  margin-left: 4px;
 }
 .left-body,
 .right-body,
@@ -2138,6 +2199,16 @@ onMounted(() => {
   padding: 8px;
   border-radius: 6px;
   cursor: pointer;
+}
+.ws-chevron {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--dap-gray-500);
+  transition: transform 0.15s ease;
+}
+.ws-chevron.open {
+  transform: rotate(90deg);
+  color: var(--dap-primary);
 }
 .ws-row:hover,
 .session-row:hover,

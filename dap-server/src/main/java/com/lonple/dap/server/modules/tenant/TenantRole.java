@@ -22,12 +22,16 @@ public enum TenantRole {
             "workspace:operate",
             "requirement:view",
             "requirement:operate",
+            "issue:view",
+            "issue:operate",
             "work:access",
             "audit:view");
 
     public static final Set<String> OPERATOR_PERMISSIONS = Set.of(
             "requirement:view",
             "requirement:operate",
+            "issue:view",
+            "issue:operate",
             "work:access");
 
     private final String label;

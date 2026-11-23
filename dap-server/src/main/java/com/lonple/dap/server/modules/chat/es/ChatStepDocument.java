@@ -81,13 +81,4 @@ public class ChatStepDocument {
     /** ISO-8601 毫秒字符串 */
     @Field(type = FieldType.Keyword)
     private String occurredAt;
-
-    @Field(type = FieldType.Long)
-    private Long pipeInstanceId;
-
-    @Field(type = FieldType.Long)
-    private Long pipeStepInstanceId;
-
-    @Field(type = FieldType.Keyword)
-    private String pipeStepCode;
 }

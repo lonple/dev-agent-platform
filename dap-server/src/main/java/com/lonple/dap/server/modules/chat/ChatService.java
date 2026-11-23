@@ -12,13 +12,13 @@ import com.lonple.dap.server.modules.chat.dto.ChatMessageVO;
 import com.lonple.dap.server.modules.chat.dto.ChatSessionVO;
 import com.lonple.dap.server.modules.chat.entity.WbChatMessage;
 import com.lonple.dap.server.modules.chat.entity.WbChatSession;
+import com.lonple.dap.server.modules.audit.TokenUsageService;
 import com.lonple.dap.server.modules.chat.es.ChatStepDocument;
 import com.lonple.dap.server.modules.chat.es.ChatStepEsService;
 import com.lonple.dap.server.modules.chat.es.ChatStepRecorder;
 import com.lonple.dap.server.modules.chat.es.ChatStepWriteContext;
 import com.lonple.dap.server.modules.chat.mapper.ChatMessageMapper;
 import com.lonple.dap.server.modules.chat.mapper.ChatSessionMapper;
-import com.lonple.dap.server.modules.pipeline.PipelineService;
 import com.lonple.dap.server.modules.position.PositionService;
 import com.lonple.dap.server.modules.position.entity.SysPosition;
 import com.lonple.dap.server.modules.position.entity.SysPositionSkill;
@@ -59,9 +59,9 @@ public class ChatService {
     private final ChatHistoryProperties historyProperties;
     private final ChatRunRegistry runRegistry;
     private final ObjectMapper objectMapper;
-    private final PipelineService pipelineService;
     private final ChatStepRecorder chatStepRecorder;
     private final ChatStepEsService chatStepEsService;
+    private final TokenUsageService tokenUsageService;
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
@@ -244,21 +244,7 @@ public class ChatService {
                             chatStepRecorder.recordStep(stepCtx, runId, assistantId, data);
                         } else if ("usage".equals(event)) {
                             sendRaw(emitter, "usage", data);
-                            try {
-                                JsonNode node = objectMapper.readTree(data);
-                                long prompt = node.path("prompt_tokens").asLong(0);
-                                long completion = node.path("completion_tokens").asLong(0);
-                                long total = node.path("total_tokens").asLong(0);
-                                WbChatSession sess = sessionMapper.selectById(sessionId);
-                                if (sess != null && sess.getPipeStepInstanceId() != null) {
-                                    pipelineService.addUsageByStepInstance(
-                                            sess.getPipeStepInstanceId(), prompt, completion, total);
-                                } else {
-                                    pipelineService.addUsageBySession(sessionId, prompt, completion, total);
-                                }
-                            } catch (Exception ex) {
-                                log.warn("record pipeline usage failed: {}", ex.getMessage());
-                            }
+                            tokenUsageService.recordRunUsage(session, runId, assistantId, data);
                         } else if ("error".equals(event)) {
                             sendRaw(emitter, "error", data);
                         } else if ("done".equals(event)) {

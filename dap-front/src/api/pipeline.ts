@@ -1,172 +1,233 @@
 import request from '../utils/request'
 
-export interface PipelineAssignee {
-  userId: number
-  username?: string
+export interface PipelineUnitItem {
+  id: number
+  unitCode: string
+  unitName: string
+  positionCode: string
+  taskTypeCode: string
   status: string
-  actedAt?: string
-}
-
-export interface PipelineReviewItem {
-  id?: number
-  ordinal?: number
-  content: string
-  checked: boolean
-  source?: string
-}
-
-export interface PipelineReviewDoc {
-  reviewId: number
-  stepInstanceId?: number
-  stepName?: string
-  roleHint?: string
-  wikiNodeId?: number
-  wikiPath?: string
-}
-
-export interface PipelineStep {
-  stepInstanceId: number
-  stepCode: string
-  stepName: string
-  status: string
-  round: number
-  executor: string
-  handlerUserId?: number
-  sessionId?: number
-  outputArtifactId?: number
-  reviewId?: number
-  errorMessage?: string
-  startedAt?: string
-  finishedAt?: string
-  durationMs: number
-  promptTokens: number
-  completionTokens: number
-  totalTokens: number
-  assignees?: PipelineAssignee[]
-  inputPaths?: string[]
+  roundTier: string
+  maxRound: number
+  confirmRound: number
+  repoKind: string
+  sessionId?: number | null
+  outputWorkspaceNodeId?: number | null
+  outputWikiNodeId?: number | null
+  errorMessage?: string | null
+  /** 会话实际绑定的上下文 Wiki 路径 */
   contextPaths?: string[]
-  outputTemplatePath?: string
-  outputDirPath?: string
-  codeRepoPaths?: string[]
-  reviewItems?: PipelineReviewItem[]
-  reviewWikiNodeId?: number
-  reviewWikiPath?: string
-  reviewDocs?: PipelineReviewDoc[]
 }
 
-export interface PipelineAiPrepare {
-  stepInstanceId: number
-  sessionId: number
-  workspaceId?: number
-  kickoffPrompt: string
-  instance: PipelineInstance
+export interface PipelineNodeItem {
+  id: number
+  nodeCode: string
+  nodeName: string
+  kind: string
+  status: string
+  optionalFlag?: boolean
+  enabledFlag?: boolean
+  sortOrder: number
+  units: PipelineUnitItem[]
+}
+
+export interface PipelineWorktreeItem {
+  id: number
+  productCodeRepoId: number
+  repoKind: string
+  branchName: string
+  worktreePath: string
+  baseLocalPath: string
+  status: string
+}
+
+export interface PipelineTrackMergeItem {
+  id: string
+  title: string
+  severity?: string
+  suggestion?: string
+  target?: string
+  valuable?: boolean | null
+  reviewers?: string[]
+  sources?: Array<{ position?: string; unitCode?: string; originalId?: string; title?: string }>
+}
+
+export interface PipelineTrackMerge {
+  id: number
+  trackCode: string
+  label?: string
+  reviewNodeCode?: string
+  mergeFileName?: string
+  status: string
+  llmMergeJson?: string | null
+  itemsJson?: string | null
+  mergedWikiNodeId?: number | null
+  confirmedAt?: string | null
+  createdAt?: string
 }
 
 export interface PipelineInstance {
-  instanceId: number
-  requirementId: number
+  id: number
+  requirementId?: number | null
+  issueId?: number | null
+  issueNo?: string | null
+  productId?: number
+  reqNo?: string
+  requirementName?: string
+  definitionId: number
   definitionCode?: string
-  definitionVersion?: number
+  definitionName?: string
   status: string
-  waitingReason?: string
-  currentStepCodes?: string[]
-  totalDurationMs: number
-  totalPromptTokens: number
-  totalCompletionTokens: number
-  totalTokens: number
+  waitingReason?: string | null
+  optionsJson?: string | null
   startedAt?: string
   finishedAt?: string
-  steps: PipelineStep[]
+  nodes: PipelineNodeItem[]
+  worktrees: PipelineWorktreeItem[]
+  trackMerges?: PipelineTrackMerge[]
 }
 
-export function getPipeline(requirementId: number) {
-  return request.get<any, PipelineInstance | null>(`/requirements/${requirementId}/pipeline`)
+export interface PipelineConfirmRound {
+  id: number
+  unitInstanceId: number
+  roundNo: number
+  phase: string
+  findingsJson?: string | null
+  openQuestionsJson?: string | null
+  humanAnswersJson?: string | null
 }
 
-export function startPipeline(requirementId: number, fromStepCode?: string) {
-  return request.post<any, PipelineInstance>(`/requirements/${requirementId}/pipeline/start`, {
-    fromStepCode: fromStepCode || null,
+export function startPipeline(requirementId: number, definitionCode?: string) {
+  return request.post<any, { id: number }>('/pipeline/instances', {
+    requirementId,
+    definitionCode,
   })
 }
 
-export function cancelPipeline(requirementId: number) {
-  return request.post<any, PipelineInstance>(`/requirements/${requirementId}/pipeline/cancel`)
+export function startIssuePipeline(issueId: number, definitionCode = 'ISSUE_AUTO') {
+  return request.post<any, { id: number }>('/pipeline/instances', {
+    issueId,
+    definitionCode,
+  })
 }
 
-export function approvePipelineStep(
-  requirementId: number,
-  stepInstanceId: number,
-  comment?: string,
+export function getPipelineByRequirement(requirementId: number) {
+  return request.get<any, PipelineInstance | null>(
+    `/pipeline/instances/by-requirement/${requirementId}`,
+  )
+}
+
+export function getPipelineByIssue(issueId: number) {
+  return request.get<any, PipelineInstance | null>(`/pipeline/instances/by-issue/${issueId}`)
+}
+
+export function getPipeline(id: number) {
+  return request.get<any, PipelineInstance>(`/pipeline/instances/${id}`)
+}
+
+export function cancelPipeline(id: number) {
+  return request.post<any, void>(`/pipeline/instances/${id}/cancel`)
+}
+
+export function pmSecondPipeline(
+  id: number,
+  data: {
+    action: 'PASS' | 'PASS_AND_DEV'
+    releaseVersionId: number
+    releaseTime?: string | null
+    enableArch: boolean
+    enableUi: boolean
+  },
 ) {
-  return request.post<any, PipelineInstance>(
-    `/requirements/${requirementId}/pipeline/steps/${stepInstanceId}/approve`,
-    { comment },
-  )
+  return request.post<any, void>(`/pipeline/instances/${id}/pm-second`, data)
 }
 
-export function rejectPipelineStep(
-  requirementId: number,
-  stepInstanceId: number,
-  comment?: string,
+export function ensurePipelineWorktrees(id: number) {
+  return request.post<any, PipelineWorktreeItem[]>(`/pipeline/instances/${id}/ensure-worktrees`)
+}
+
+export function triggerPipelineUnit(unitId: number) {
+  return request.post<any, void>(`/pipeline/units/${unitId}/trigger`)
+}
+
+export interface CodingProgress {
+  unitId: number
+  unitName?: string
+  unitStatus?: string
+  currentStage?: string | null
+  currentSessionId?: number | null
+  errorMessage?: string | null
+  sessions: Array<{ sessionId: number; title?: string; createdAt?: string }>
+  jobs: Array<{
+    id: number
+    jobType?: string
+    status?: string
+    lastError?: string | null
+    payloadJson?: string | null
+    updatedAt?: string
+  }>
+  planTasks: Array<{
+    id?: string
+    title?: string
+    module?: string
+    status?: string
+    sessionId?: number | null
+  }>
+}
+
+export function getCodingProgress(unitId: number) {
+  return request.get<any, CodingProgress>(`/pipeline/units/${unitId}/coding`)
+}
+
+/** 停止正在执行的 Agent 单元 */
+export function stopPipelineUnit(unitId: number) {
+  return request.post<any, void>(`/pipeline/units/${unitId}/stop`)
+}
+
+export function getPipelineUnitConfirm(unitId: number) {
+  return request.get<any, PipelineConfirmRound | null>(`/pipeline/units/${unitId}/confirm`)
+}
+
+export function confirmPipelineUnit(
+  unitId: number,
+  data: {
+    findingAnswers: Array<Record<string, unknown>>
+    questionAnswers: Array<Record<string, unknown>>
+  },
 ) {
-  return request.post<any, PipelineInstance>(
-    `/requirements/${requirementId}/pipeline/steps/${stepInstanceId}/reject`,
-    { comment },
+  return request.post<any, void>(`/pipeline/units/${unitId}/confirm`, data)
+}
+
+/** 完成输出后手动发布到 Wiki */
+export function publishPipelineUnit(unitId: number) {
+  return request.post<any, void>(`/pipeline/units/${unitId}/publish`)
+}
+
+export function getPipelineTrackMerge(instanceId: number, trackCode: string) {
+  return request.get<any, PipelineTrackMerge | null>(
+    `/pipeline/instances/${instanceId}/track-merge/${trackCode}`,
   )
 }
 
-export function completePipelineAiStep(
-  requirementId: number,
-  stepInstanceId: number,
-  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number },
+export function confirmPipelineTrackMerge(
+  instanceId: number,
+  trackCode: string,
+  items: PipelineTrackMergeItem[],
 ) {
-  return request.post<any, PipelineInstance>(
-    `/requirements/${requirementId}/pipeline/steps/${stepInstanceId}/complete-ai`,
-    usage || {},
+  return request.post<any, void>(
+    `/pipeline/instances/${instanceId}/track-merge/${trackCode}/confirm`,
+    { items },
   )
 }
 
-export function retryPipelineAiStep(requirementId: number, stepInstanceId: number) {
-  return request.post<any, PipelineInstance>(
-    `/requirements/${requirementId}/pipeline/steps/${stepInstanceId}/retry-ai`,
-  )
+export interface PipelineWikiDoc {
+  id: number
+  displayName: string
+  content: string
 }
 
-export function preparePipelineAi(requirementId: number, stepInstanceId: number) {
-  return request.post<any, PipelineAiPrepare>(
-    `/requirements/${requirementId}/pipeline/steps/${stepInstanceId}/prepare-ai`,
-  )
-}
-
-export function finalizePipelineAi(requirementId: number, stepInstanceId: number) {
-  return request.post<any, PipelineInstance>(
-    `/requirements/${requirementId}/pipeline/steps/${stepInstanceId}/finalize-ai`,
-  )
-}
-
-export function updatePipelineReviewItems(
-  requirementId: number,
-  stepInstanceId: number,
-  items: { id?: number; checked: boolean; content?: string }[],
-) {
-  return request.put<any, void>(
-    `/requirements/${requirementId}/pipeline/steps/${stepInstanceId}/review-items`,
-    items,
-  )
-}
-
-export function formatDuration(ms?: number | null) {
-  const n = ms ?? 0
-  if (n < 1000) return `${n} ms`
-  const s = Math.round(n / 1000)
-  if (s < 60) return `${s} s`
-  const m = Math.floor(s / 60)
-  const rs = s % 60
-  return `${m}m ${rs}s`
-}
-
-export function formatTokens(n?: number | null) {
-  const v = n ?? 0
-  if (v >= 10000) return `${(v / 1000).toFixed(1)}k`
-  return String(v)
+export function openPipelineDoc(instanceId: number, name: string) {
+  return request.get<any, PipelineWikiDoc>(`/pipeline/instances/${instanceId}/docs`, {
+    params: { name },
+  })
 }

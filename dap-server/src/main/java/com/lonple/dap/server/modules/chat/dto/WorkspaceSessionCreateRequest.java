@@ -20,8 +20,11 @@ public class WorkspaceSessionCreateRequest {
     @Size(max = 128)
     private String title;
 
-    /** 任务会话必填 */
+    /** 任务会话：关联需求（问题任务可空） */
     private Long requirementId;
+
+    /** 任务会话：关联问题单（需求任务可空） */
+    private Long issueId;
 
     /** SessionTaskType.name，任务会话必填 */
     private String taskTypeCode;

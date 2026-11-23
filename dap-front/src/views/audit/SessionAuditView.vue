@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getChatStep, searchChatSteps, type ChatStepItem } from '../../api/audit'
+import { formatDateTime } from '../../utils/date'
 
 const route = useRoute()
 const loading = ref(false)
@@ -17,7 +18,6 @@ const query = reactive({
   size: 20,
   sessionId: undefined as number | undefined,
   runId: '' as string,
-  pipeInstanceId: undefined as number | undefined,
   keyword: '',
 })
 
@@ -35,7 +35,6 @@ async function load() {
       size: query.size,
       sessionId: query.sessionId,
       runId: query.runId.trim() || undefined,
-      pipeInstanceId: query.pipeInstanceId,
       keyword: query.keyword.trim() || undefined,
       includeDetail: false,
     })
@@ -66,10 +65,22 @@ async function openDetail(row: ChatStepItem) {
   }
 }
 
+function formatDetail(raw: unknown): string {
+  if (raw == null) {
+    return '（无 detail：该步骤未上报细节）'
+  }
+  if (Array.isArray(raw) && raw.length === 0) {
+    return '（无 detail：空数组，多为历史 llm 步骤未写入）'
+  }
+  if (typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw as object).length === 0) {
+    return '（无 detail：空对象）'
+  }
+  return JSON.stringify(raw, null, 2)
+}
+
 onMounted(() => {
   query.sessionId = numOrUndef(route.query.sessionId)
   query.runId = typeof route.query.runId === 'string' ? route.query.runId : ''
-  query.pipeInstanceId = numOrUndef(route.query.pipeInstanceId)
   void load()
 })
 </script>
@@ -79,7 +90,7 @@ onMounted(() => {
     <div class="page-hd">
       <div>
         <h2>会话日志</h2>
-        <p class="hint">按会话 / 一次响应(runId) / 流水线实例筛选；详情含步骤全量 detail</p>
+        <p class="hint">按会话 / 一次响应(runId) 筛选；详情含步骤全量 detail</p>
       </div>
     </div>
 
@@ -90,13 +101,6 @@ onMounted(() => {
       <el-form-item label="响应 runId">
         <el-input v-model="query.runId" clearable placeholder="一次响应" style="width: 220px" />
       </el-form-item>
-      <el-form-item label="流水线实例">
-        <el-input-number
-          v-model="query.pipeInstanceId"
-          :controls="false"
-          placeholder="pipeInstanceId"
-        />
-      </el-form-item>
       <el-form-item label="关键词">
         <el-input v-model="query.keyword" clearable placeholder="搜简要 message" />
       </el-form-item>
@@ -106,14 +110,17 @@ onMounted(() => {
     </el-form>
 
     <el-table v-loading="loading" :data="rows" stripe @row-click="openDetail">
-      <el-table-column prop="occurredAt" label="时间" min-width="170" />
+      <el-table-column label="时间" min-width="170">
+        <template #default="{ row }">
+          {{ formatDateTime(row.occurredAt) || '—' }}
+        </template>
+      </el-table-column>
       <el-table-column prop="sessionTitle" label="会话" min-width="140" show-overflow-tooltip />
       <el-table-column prop="username" label="用户" width="100" />
       <el-table-column prop="step" label="步骤" width="120" />
       <el-table-column prop="llmRound" label="轮次" width="70" />
       <el-table-column prop="message" label="摘要" min-width="220" show-overflow-tooltip />
       <el-table-column prop="runId" label="runId" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="pipeStepCode" label="流水线步" width="120" show-overflow-tooltip />
     </el-table>
 
     <div class="pager">
@@ -129,16 +136,13 @@ onMounted(() => {
     <el-drawer v-model="detailVisible" title="步骤详情" size="480px">
       <div v-loading="detailLoading">
         <template v-if="detail">
+          <p><b>时间</b>：{{ formatDateTime(detail.occurredAt) || '—' }}</p>
           <p><b>步骤</b>：{{ detail.step }} · seq {{ detail.seq }} · 轮次 {{ detail.llmRound ?? '—' }}</p>
           <p><b>摘要</b>：{{ detail.message }}</p>
           <p><b>会话</b>：{{ detail.sessionTitle }} ({{ detail.sessionId }})</p>
           <p><b>runId</b>：{{ detail.runId }}</p>
-          <p v-if="detail.pipeInstanceId">
-            <b>流水线</b>：instance {{ detail.pipeInstanceId }} / step {{ detail.pipeStepInstanceId }} /
-            {{ detail.pipeStepCode }}
-          </p>
           <h4>detail</h4>
-          <pre class="detail-json">{{ JSON.stringify(detail.detail ?? {}, null, 2) }}</pre>
+          <pre class="detail-json">{{ formatDetail(detail.detail) }}</pre>
         </template>
       </div>
     </el-drawer>

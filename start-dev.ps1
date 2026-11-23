@@ -1,13 +1,22 @@
 ﻿# DAP one-click start (PowerShell)
 # backend :8200  frontend :8201  agent :8202
+# sandbox-manager :9210  sandbox-client :9300
 # Free ports if occupied; merge logs; Ctrl+C stops all
 # Usage: .\start-dev.ps1
+# Optional: .\start-dev.ps1 -BuildSandboxImage   # 缺失时构建 dap-sandbox-webdev:dev
+
+param(
+    [switch]$BuildSandboxImage
+)
 
 $ErrorActionPreference = 'Stop'
 $Root = $PSScriptRoot
 $BackendPort = 8200
 $FrontendPort = 8201
 $AgentPort = 8202
+$SandboxManagerPort = 9210
+$SandboxClientPort = 9300
+$SandboxImage = 'dap-sandbox-webdev:dev'
 
 # 统一控制台与子进程 stdout 为 UTF-8，避免中文乱码
 try { chcp 65001 | Out-Null } catch { }
@@ -114,7 +123,12 @@ function Start-LoggedProcess {
     $psi.CreateNoWindow = $true
     $psi.StandardOutputEncoding = $utf8
     $psi.StandardErrorEncoding = $utf8
-    foreach ($key in @('JAVA_TOOL_OPTIONS', 'PYTHONIOENCODING', 'PYTHONUTF8')) {
+    foreach ($key in @(
+            'JAVA_TOOL_OPTIONS', 'JAVA_OPTS', 'GRADLE_OPTS',
+            'PYTHONIOENCODING', 'PYTHONUTF8',
+            'LLM_API_KEY', 'LLM_BASE_URL', 'LLM_MODEL',
+            'DAP_REVIEW_LLM_API_KEY', 'DAP_REVIEW_LLM_BASE_URL', 'DAP_REVIEW_LLM_CHAT_MODEL'
+        )) {
         $val = [Environment]::GetEnvironmentVariable($key)
         if (-not [string]::IsNullOrEmpty($val)) {
             $psi.EnvironmentVariables[$key] = $val
@@ -139,11 +153,47 @@ function Start-LoggedProcess {
     return $proc
 }
 
-Set-Location $Root
-Write-Sys "Starting DAP: backend :$BackendPort , frontend :$FrontendPort , agent :$AgentPort"
-Write-Sys 'Press Ctrl+C to stop all'
+function Ensure-SandboxImage {
+    # 仅预检：不创建容器。缺镜像只告警，不阻断 start-dev。
+    $docker = Get-Command docker.exe -ErrorAction SilentlyContinue
+    if (-not $docker) { $docker = Get-Command docker -ErrorAction SilentlyContinue }
+    if (-not $docker) {
+        Write-Sys '[sandbox check] docker not found — OK to continue; attach later needs Docker Desktop' 'Yellow'
+        return
+    }
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        # 吞掉 docker 的 "No such image" 原生 stderr，避免看起来像启动失败
+        cmd /c "docker image inspect $SandboxImage >nul 2>&1"
+        $imgOk = ($LASTEXITCODE -eq 0)
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    if ($imgOk) {
+        Write-Sys "[sandbox check] image ok: $SandboxImage (containers still created only on lease attach)"
+        return
+    }
+    if ($BuildSandboxImage) {
+        Write-Sys "[sandbox check] building image $SandboxImage ..." 'Yellow'
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'build-code-tools-image.ps1')
+        if ($LASTEXITCODE -ne 0) {
+            Write-Sys '[sandbox check] image build failed — start-dev continues; fix before attach' 'Yellow'
+        } else {
+            Write-Sys "[sandbox check] image built: $SandboxImage"
+        }
+        return
+    }
+    Write-Sys "[sandbox check] image not built yet: $SandboxImage — start-dev continues. Build once with .\build-code-tools-image.ps1 (or -BuildSandboxImage). Container create = lease attach, not now." 'Yellow'
+}
 
-Stop-PortListeners -Ports @($BackendPort, $FrontendPort, $AgentPort)
+Set-Location $Root
+Write-Sys "Starting DAP: backend :$BackendPort , frontend :$FrontendPort , agent :$AgentPort , sandbox-manager :$SandboxManagerPort , sandbox-client :$SandboxClientPort"
+Write-Sys 'Press Ctrl+C to stop all'
+Write-Sys 'Note: code-tools Docker containers are created on lease attach, not at start-dev'
+
+Stop-PortListeners -Ports @($BackendPort, $FrontendPort, $AgentPort, $SandboxManagerPort, $SandboxClientPort)
+Ensure-SandboxImage
 
 $gradle = Get-Command gradle.bat -ErrorAction SilentlyContinue
 if (-not $gradle) { $gradle = Get-Command gradle -ErrorAction SilentlyContinue }
@@ -175,6 +225,45 @@ if (-not (Test-Path $agentEnv)) {
     }
 }
 
+# 将 dap-agent/.env 的 LLM_* 注入进程环境，供 backend 代码评审分片与 agent 共用同一套 key/模型
+function Import-AgentLlmEnv([string]$EnvFile) {
+    if (-not (Test-Path $EnvFile)) { return }
+    $keys = @('LLM_API_KEY', 'LLM_BASE_URL', 'LLM_MODEL')
+    Get-Content -Path $EnvFile -Encoding UTF8 | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith('#')) { return }
+        $eq = $line.IndexOf('=')
+        if ($eq -lt 1) { return }
+        $k = $line.Substring(0, $eq).Trim()
+        if ($keys -notcontains $k) { return }
+        $v = $line.Substring($eq + 1).Trim().Trim('"').Trim("'")
+        Set-Item -Path "Env:$k" -Value $v
+    }
+    if ($env:LLM_API_KEY) {
+        Write-Sys 'Loaded LLM_* from dap-agent/.env for backend review shards'
+    } else {
+        Write-Sys 'LLM_API_KEY missing in dap-agent/.env — code review shards will fail' 'Yellow'
+    }
+}
+Import-AgentLlmEnv $agentEnv
+
+$sbMgrGradle = Join-Path $Root 'sandbox\sandbox-manager\gradlew.bat'
+$sbCliGradle = Join-Path $Root 'sandbox\sandbox-client\gradlew.bat'
+if (-not (Test-Path $sbMgrGradle) -or -not (Test-Path $sbCliGradle)) {
+    Write-Sys 'sandbox gradlew.bat not found under sandbox/sandbox-manager|client' 'Red'
+    exit 1
+}
+
+$sbManager = Start-LoggedProcess -Name 'sb-manager' -Color DarkYellow `
+    -FilePath $sbMgrGradle `
+    -ArgumentList @('bootRun', '--no-daemon') `
+    -WorkingDirectory (Join-Path $Root 'sandbox\sandbox-manager')
+
+$sbClient = Start-LoggedProcess -Name 'sb-client' -Color DarkCyan `
+    -FilePath $sbCliGradle `
+    -ArgumentList @('bootRun', '--no-daemon') `
+    -WorkingDirectory (Join-Path $Root 'sandbox\sandbox-client')
+
 $backend = Start-LoggedProcess -Name 'backend' -Color Green `
     -FilePath $gradle.Source `
     -ArgumentList @('bootRun', '--no-daemon') `
@@ -190,7 +279,7 @@ $agent = Start-LoggedProcess -Name 'agent' -Color Magenta `
     -ArgumentList @('run', 'dap-agent') `
     -WorkingDirectory (Join-Path $Root 'dap-agent')
 
-$script:procs = @($backend, $frontend, $agent)
+$script:procs = @($sbManager, $sbClient, $backend, $frontend, $agent)
 
 try {
     while ($true) {

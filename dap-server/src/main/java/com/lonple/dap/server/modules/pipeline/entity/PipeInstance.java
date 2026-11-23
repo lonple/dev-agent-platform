@@ -12,14 +12,18 @@ import java.time.LocalDateTime;
 public class PipeInstance {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long tenantId;
     private Long requirementId;
+    /** 问题单主体（与 requirementId 二选一） */
+    private Long issueId;
     private Long definitionId;
+    private Long startedBy;
     private String status;
     private String waitingReason;
-    private String currentStepCodes;
+    private String optionsJson;
+    private Long releaseVersionId;
+    private LocalDateTime releaseTime;
     private Long totalDurationMs;
-    private Long totalPromptTokens;
-    private Long totalCompletionTokens;
     private Long totalTokens;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;

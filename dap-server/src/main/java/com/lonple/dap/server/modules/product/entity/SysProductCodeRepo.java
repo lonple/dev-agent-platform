@@ -15,6 +15,9 @@ public class SysProductCodeRepo {
     private Long productId;
     private String localPath;
     private String label;
+    /** BIZ / TEST / OTHER */
+    private String repoKind;
     private Integer sortNo;
     private LocalDateTime createdAt;
 }
+

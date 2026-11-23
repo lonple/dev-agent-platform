@@ -31,7 +31,7 @@ const tenantConfigMenus = [
 
 const auditMenus = [
   { label: '会话日志', path: '/audit/sessions', permission: 'audit:view' },
-  { label: '工作流', path: '/audit/workflow', permission: 'audit:view' },
+  { label: 'Token消耗', path: '/audit/tokens', permission: 'audit:view' },
 ]
 
 const requirementMenus = [
@@ -52,13 +52,19 @@ const topMenus = computed(() => {
       permission: 'requirement:view',
     },
     {
+      label: '问题单管理',
+      path: '/issues',
+      needTenant: true,
+      permission: 'issue:view',
+    },
+    {
       label: '工作台',
       path: '/workbench',
       needTenant: true,
       permission: 'work:access',
     },
     {
-      label: '审计日志',
+      label: '运维中心',
       path: '/audit/sessions',
       needTenant: true,
       anyPermissions: auditPermissions,
@@ -167,7 +173,7 @@ function navigateTop(path: string) {
       router.push(first.path)
       return
     }
-    ElMessage.warning('暂无审计日志访问权限')
+    ElMessage.warning('暂无运维中心访问权限')
     return
   }
   router.push(path)
@@ -227,7 +233,8 @@ function navigateTop(path: string) {
         class="content"
         :class="{
           'with-side': showSide,
-          'flush': route.path.startsWith('/workbench'),
+          'flush':
+            route.path.startsWith('/workbench') || route.path.includes('/pipeline'),
         }"
       >
         <router-view />

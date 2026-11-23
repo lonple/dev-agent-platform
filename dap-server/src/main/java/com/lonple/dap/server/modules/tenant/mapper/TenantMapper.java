@@ -15,6 +15,12 @@ public interface TenantMapper extends BaseMapper<SysTenant> {
     @Delete("DELETE FROM req_requirement_no_seq WHERE tenant_id = #{tenantId}")
     int deleteRequirementNoSeqByTenantId(@Param("tenantId") Long tenantId);
 
+    @Delete("DELETE FROM iss_issue WHERE tenant_id = #{tenantId}")
+    int deleteIssuesByTenantId(@Param("tenantId") Long tenantId);
+
+    @Delete("DELETE FROM iss_issue_no_seq WHERE tenant_id = #{tenantId}")
+    int deleteIssueNoSeqByTenantId(@Param("tenantId") Long tenantId);
+
     @Delete("DELETE FROM sys_product WHERE tenant_id = #{tenantId}")
     int deleteProductsByTenantId(@Param("tenantId") Long tenantId);
 

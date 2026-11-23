@@ -17,6 +17,8 @@ import com.lonple.dap.server.modules.chat.mapper.SessionContextMapper;
 import com.lonple.dap.server.modules.chat.mapper.SessionInputMapper;
 import com.lonple.dap.server.modules.position.PositionService;
 import com.lonple.dap.server.modules.position.entity.SysPosition;
+import com.lonple.dap.server.modules.issue.entity.IssIssue;
+import com.lonple.dap.server.modules.issue.mapper.IssueMapper;
 import com.lonple.dap.server.modules.requirement.entity.ReqRequirement;
 import com.lonple.dap.server.modules.requirement.mapper.RequirementHandlerMapper;
 import com.lonple.dap.server.modules.requirement.mapper.RequirementMapper;
@@ -54,6 +56,7 @@ public class WorkspaceSessionService {
     private final SysWorkspaceNodeMapper nodeMapper;
     private final RequirementMapper requirementMapper;
     private final RequirementHandlerMapper handlerMapper;
+    private final IssueMapper issueMapper;
     private final PositionService positionService;
     private final WikiFsService wikiFsService;
 
@@ -85,22 +88,35 @@ public class WorkspaceSessionService {
         Long outputDirId = validateOutputDir(ws.getId(), req.getOutputDirNodeId());
 
         Long requirementId = null;
+        Long issueId = null;
         String taskTypeCode = null;
         Long positionId = null;
         SessionTaskType taskType = null;
         if ("TASK".equals(type)) {
-            if (req.getRequirementId() == null) {
-                throw new BizException("请选择关联需求");
-            }
-            ReqRequirement requirement = requirementMapper.selectById(req.getRequirementId());
-            if (requirement == null || !Objects.equals(requirement.getTenantId(), ws.getTenantId())) {
-                throw new BizException("需求不存在");
-            }
-            assertCanCreateTaskSession(requirement);
-            requirementId = requirement.getId();
             taskType = SessionTaskType.fromCode(req.getTaskTypeCode());
             taskTypeCode = taskType.name();
             positionId = resolvePositionId(req.getPositionId(), taskType);
+            boolean issueTask = taskType == SessionTaskType.GEN_ISSUE_ANALYSIS
+                    || taskType == SessionTaskType.GEN_ISSUE_FIX
+                    || taskType == SessionTaskType.GEN_ISSUE_CODE_REVIEW
+                    || taskType == SessionTaskType.GEN_ISSUE_INT_TEST;
+            if (req.getIssueId() != null) {
+                IssIssue issue = issueMapper.selectById(req.getIssueId());
+                if (issue == null || !Objects.equals(issue.getTenantId(), ws.getTenantId())) {
+                    throw new BizException("问题单不存在");
+                }
+                issueId = issue.getId();
+            }
+            if (req.getRequirementId() != null) {
+                ReqRequirement requirement = requirementMapper.selectById(req.getRequirementId());
+                if (requirement == null || !Objects.equals(requirement.getTenantId(), ws.getTenantId())) {
+                    throw new BizException("需求不存在");
+                }
+                assertCanCreateTaskSession(requirement);
+                requirementId = requirement.getId();
+            } else if (!issueTask) {
+                throw new BizException("请选择关联需求");
+            }
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -111,6 +127,7 @@ public class WorkspaceSessionService {
         session.setSessionType(type);
         session.setTitle(title);
         session.setRequirementId(requirementId);
+        session.setIssueId(issueId);
         session.setTaskTypeCode(taskTypeCode);
         session.setPositionId(positionId);
         session.setOutputDirNodeId(outputDirId);
@@ -264,10 +281,7 @@ public class WorkspaceSessionService {
         }
     }
 
-    /**
-     * 手动创建的任务会话：输出目录只能是个人工作空间目录。
-     * 流水线会话的 Wiki 输出目录由 PipelineAiRunner 写入 output_wiki_dir_node_id，不走本方法。
-     */
+    /** 任务会话：输出目录只能是个人工作空间目录。 */
     private Long validateOutputDir(Long workspaceId, Long outputDirNodeId) {
         if (outputDirNodeId == null) {
             return null;

@@ -13,13 +13,19 @@ public class AgentFileIndexVO {
     private Long workspaceId;
     private Long outputDirNodeId;
     private String outputDirLabel;
-    /** 流水线：Wiki 输出目录 */
-    private Long outputWikiDirNodeId;
-    private String outputWikiDirPath;
     private String taskTypeCode;
     private String taskTypeName;
     private String taskRemark;
     private Boolean requireDeliverable;
+    /**
+     * 编码四阶段 Job：CODING_PLAN / CODING_TASK / CODING_INTEGRATE 等。
+     * Agent 据此收窄角色、轮次与收窗纪律。
+     */
+    private String codingStage;
+    /** CODING_TASK 时的任务卡 id，如 T1 */
+    private String codingTaskId;
+    /** 本阶段强制交付文件名（如 coding_plan.json） */
+    private String stageDeliverableName;
     /**
      * 交付/输出参考模板正文。
      * 优先取会话绑定的 Wiki 模板文件内容，否则回退任务类型上的 deliverableTemplate。

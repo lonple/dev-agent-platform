@@ -115,7 +115,7 @@ public class RequirementService {
 
     /**
      * 工作台需求列表：当前处理人=我，或我在「需求处理人」名单中。
-     * scope=todo 待办（非草稿/驳回/已发布）；scope=all 全部（非草稿/驳回）。
+     * scope=todo 待办（非草稿/驳回/完成）；scope=all 全部（非草稿/驳回）。
      */
     public List<RequirementVO> listWorkbench(String scope) {
         Long tenantId = TenantSupport.requireTenantId();
@@ -311,7 +311,26 @@ public class RequirementService {
                 TenantSupport.requireUserId(), "投入研发", null);
 
         SysProduct product = productService.requireOwned(entity.getProductId());
+        boolean needBindWiki = product.getWikiNodeId() == null;
         wikiFsService.ensureRequirementArtifacts(product, entity);
+        if (needBindWiki && product.getWikiNodeId() != null) {
+            productService.updateWikiNodeId(product.getId(), product.getWikiNodeId());
+        }
+    }
+
+    /** 研发中 → 完成。 */
+    @Transactional
+    public void complete(Long id) {
+        ReqRequirement entity = requireCurrentHandler(id);
+        if (RequirementStatus.fromCode(entity.getStatus()) != RequirementStatus.DEVELOPING) {
+            throw new BizException("仅研发中状态可完成");
+        }
+        String from = entity.getStatus();
+        entity.setStatus(RequirementStatus.RELEASED.name());
+        entity.setUpdatedAt(LocalDateTime.now());
+        requirementMapper.updateById(entity);
+        appendFlow(entity, RequirementFlowNodeType.COMPLETE, from, RequirementStatus.RELEASED.name(),
+                TenantSupport.requireUserId(), "完成", null);
     }
 
     /**

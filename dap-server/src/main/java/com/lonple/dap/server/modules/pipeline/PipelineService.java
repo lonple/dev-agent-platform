@@ -2,953 +2,1147 @@ package com.lonple.dap.server.modules.pipeline;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lonple.dap.server.common.BizException;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineAssigneeVO;
 import com.lonple.dap.server.modules.pipeline.dto.PipelineInstanceVO;
+import com.lonple.dap.server.modules.pipeline.dto.PipelinePmSecondRequest;
 import com.lonple.dap.server.modules.pipeline.dto.PipelineStartRequest;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineStepGateRequest;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineStepVO;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineUsageRequest;
 import com.lonple.dap.server.modules.pipeline.entity.PipeDefinition;
 import com.lonple.dap.server.modules.pipeline.entity.PipeInstance;
-import com.lonple.dap.server.modules.pipeline.entity.PipeStepAssignee;
-import com.lonple.dap.server.modules.pipeline.entity.PipeStepDef;
-import com.lonple.dap.server.modules.pipeline.entity.PipeStepInstance;
-import com.lonple.dap.server.modules.pipeline.entity.PipeTransition;
+import com.lonple.dap.server.modules.pipeline.entity.PipeNodeDef;
+import com.lonple.dap.server.modules.pipeline.entity.PipeNodeInstance;
+import com.lonple.dap.server.modules.pipeline.entity.PipeRepoWorktree;
+import com.lonple.dap.server.modules.pipeline.entity.PipeUnitDef;
+import com.lonple.dap.server.modules.pipeline.entity.PipeUnitInstance;
 import com.lonple.dap.server.modules.pipeline.mapper.PipeDefinitionMapper;
 import com.lonple.dap.server.modules.pipeline.mapper.PipeInstanceMapper;
-import com.lonple.dap.server.modules.pipeline.mapper.PipeStepAssigneeMapper;
-import com.lonple.dap.server.modules.pipeline.mapper.PipeStepDefMapper;
-import com.lonple.dap.server.modules.pipeline.mapper.PipeStepInstanceMapper;
-import com.lonple.dap.server.modules.pipeline.mapper.PipeTransitionMapper;
+import com.lonple.dap.server.modules.pipeline.mapper.PipeNodeDefMapper;
+import com.lonple.dap.server.modules.pipeline.mapper.PipeNodeInstanceMapper;
+import com.lonple.dap.server.modules.pipeline.mapper.PipeRepoWorktreeMapper;
+import com.lonple.dap.server.modules.pipeline.mapper.PipeUnitDefMapper;
+import com.lonple.dap.server.modules.pipeline.mapper.PipeUnitInstanceMapper;
+import com.lonple.dap.server.modules.chat.dto.WorkspaceSessionCreateRequest;
+import com.lonple.dap.server.modules.chat.entity.WbChatSession;
+import com.lonple.dap.server.modules.chat.entity.WbSessionContext;
+import com.lonple.dap.server.modules.chat.entity.WbSessionInput;
+import com.lonple.dap.server.modules.chat.mapper.ChatSessionMapper;
+import com.lonple.dap.server.modules.chat.mapper.SessionContextMapper;
+import com.lonple.dap.server.modules.chat.mapper.SessionInputMapper;
 import com.lonple.dap.server.modules.product.ProductService;
 import com.lonple.dap.server.modules.product.entity.SysProduct;
+import com.lonple.dap.server.modules.product.entity.SysProductCodeRepo;
+import com.lonple.dap.server.modules.product.entity.SysProductVersion;
+import com.lonple.dap.server.modules.issue.IssueService;
+import com.lonple.dap.server.modules.issue.entity.IssIssue;
 import com.lonple.dap.server.modules.requirement.entity.ReqRequirement;
 import com.lonple.dap.server.modules.requirement.mapper.RequirementMapper;
-import com.lonple.dap.server.modules.sysuser.entity.SysUser;
-import com.lonple.dap.server.modules.sysuser.mapper.SysUserMapper;
-import com.lonple.dap.server.modules.chat.entity.WbChatSession;
-import com.lonple.dap.server.modules.chat.mapper.ChatSessionMapper;
+import com.lonple.dap.server.modules.tnworkspace.WorkspaceFsService;
+import com.lonple.dap.server.modules.tnworkspace.dto.WorkspaceFileContentVO;
+import com.lonple.dap.server.modules.tnworkspace.entity.SysWorkspaceNode;
 import com.lonple.dap.server.modules.wiki.WikiFsService;
+import com.lonple.dap.server.modules.wiki.dto.WikiFileContentVO;
 import com.lonple.dap.server.modules.wiki.entity.SysWikiNode;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineReviewDocVO;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineReviewItemVO;
-import com.lonple.dap.server.modules.pipeline.entity.PipeArtifact;
-import com.lonple.dap.server.modules.pipeline.entity.PipeReview;
-import com.lonple.dap.server.modules.pipeline.entity.PipeReviewItem;
-import com.lonple.dap.server.modules.pipeline.mapper.PipeReviewItemMapper;
-import com.lonple.dap.server.modules.pipeline.mapper.PipeReviewMapper;
-import com.lonple.dap.server.modules.product.entity.SysProductCodeRepo;
 import com.lonple.dap.server.security.TenantSupport;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class PipelineService {
 
     private final PipeDefinitionMapper definitionMapper;
-    private final PipeStepDefMapper stepDefMapper;
-    private final PipeTransitionMapper transitionMapper;
+    private final PipeNodeDefMapper nodeDefMapper;
+    private final PipeUnitDefMapper unitDefMapper;
     private final PipeInstanceMapper instanceMapper;
-    private final PipeStepInstanceMapper stepInstanceMapper;
-    private final PipeStepAssigneeMapper assigneeMapper;
+    private final PipeNodeInstanceMapper nodeInstanceMapper;
+    private final PipeUnitInstanceMapper unitInstanceMapper;
+    private final PipeRepoWorktreeMapper worktreeMapper;
     private final RequirementMapper requirementMapper;
+    private final IssueService issueService;
     private final ProductService productService;
-    private final SysUserMapper userMapper;
+    private final GitWorktreeService gitWorktreeService;
     private final ObjectMapper objectMapper;
+    private final PipeRuntimeService pipeRuntimeService;
     private final WikiFsService wikiFsService;
-    private final PipeArtifactService artifactService;
-    private final PipeReviewItemMapper reviewItemMapper;
-    private final PipeReviewMapper reviewMapper;
+    private final WorkspaceFsService workspaceFsService;
     private final ChatSessionMapper chatSessionMapper;
-    private final ObjectProvider<PipelineAiRunner> aiRunnerProvider;
+    private final SessionInputMapper sessionInputMapper;
+    private final SessionContextMapper sessionContextMapper;
+    private final PipeUnitMaterialBinder materialBinder;
+    private final PipeMergeService pipeMergeService;
 
-    public PipelineInstanceVO getByRequirement(Long requirementId) {
-        requireRequirementInTenant(requirementId);
-        PipeInstance inst = findActiveOrLatest(requirementId);
-        if (inst == null) {
-            return null;
-        }
-        return toVo(inst);
+    public PipelineService(
+            PipeDefinitionMapper definitionMapper,
+            PipeNodeDefMapper nodeDefMapper,
+            PipeUnitDefMapper unitDefMapper,
+            PipeInstanceMapper instanceMapper,
+            PipeNodeInstanceMapper nodeInstanceMapper,
+            PipeUnitInstanceMapper unitInstanceMapper,
+            PipeRepoWorktreeMapper worktreeMapper,
+            RequirementMapper requirementMapper,
+            IssueService issueService,
+            ProductService productService,
+            GitWorktreeService gitWorktreeService,
+            ObjectMapper objectMapper,
+            @Lazy PipeRuntimeService pipeRuntimeService,
+            WikiFsService wikiFsService,
+            WorkspaceFsService workspaceFsService,
+            ChatSessionMapper chatSessionMapper,
+            SessionInputMapper sessionInputMapper,
+            SessionContextMapper sessionContextMapper,
+            PipeUnitMaterialBinder materialBinder,
+            PipeMergeService pipeMergeService) {
+        this.definitionMapper = definitionMapper;
+        this.nodeDefMapper = nodeDefMapper;
+        this.unitDefMapper = unitDefMapper;
+        this.instanceMapper = instanceMapper;
+        this.nodeInstanceMapper = nodeInstanceMapper;
+        this.unitInstanceMapper = unitInstanceMapper;
+        this.worktreeMapper = worktreeMapper;
+        this.requirementMapper = requirementMapper;
+        this.issueService = issueService;
+        this.productService = productService;
+        this.gitWorktreeService = gitWorktreeService;
+        this.objectMapper = objectMapper;
+        this.pipeRuntimeService = pipeRuntimeService;
+        this.wikiFsService = wikiFsService;
+        this.workspaceFsService = workspaceFsService;
+        this.chatSessionMapper = chatSessionMapper;
+        this.sessionInputMapper = sessionInputMapper;
+        this.sessionContextMapper = sessionContextMapper;
+        this.materialBinder = materialBinder;
+        this.pipeMergeService = pipeMergeService;
     }
 
     @Transactional
-    public PipelineInstanceVO start(Long requirementId, PipelineStartRequest req) {
-        ReqRequirement requirement = requireRequirementInTenant(requirementId);
-        PipeInstance existing = instanceMapper.selectOne(new LambdaQueryWrapper<PipeInstance>()
-                .eq(PipeInstance::getRequirementId, requirementId)
-                .in(PipeInstance::getStatus, List.of("RUNNING", "WAITING_HUMAN")));
-        if (existing != null) {
-            throw new BizException(409, "需求已有进行中的流水线实例");
+    public Long start(PipelineStartRequest req) {
+        Long tenantId = TenantSupport.requireTenantId();
+        boolean hasReq = req.getRequirementId() != null;
+        boolean hasIssue = req.getIssueId() != null;
+        if (hasReq == hasIssue) {
+            throw new BizException("请指定 requirementId 或 issueId（二选一）");
         }
 
-        PipeDefinition def = requireDefaultDefinition();
-        List<PipeStepDef> defs = listStepDefs(def.getId());
-        if (defs.isEmpty()) {
-            throw new BizException("流水线定义无步骤");
-        }
-
-        String fromCode = req != null && StringUtils.hasText(req.getFromStepCode())
-                ? req.getFromStepCode().trim()
-                : defs.getFirst().getCode();
-        PipeStepDef startDef = defs.stream()
-                .filter(s -> s.getCode().equals(fromCode))
-                .findFirst()
-                .orElseThrow(() -> new BizException("起始步骤不存在：" + fromCode));
-
-        LocalDateTime now = LocalDateTime.now();
+        PipeDefinition def;
         PipeInstance inst = new PipeInstance();
-        inst.setRequirementId(requirement.getId());
-        inst.setDefinitionId(def.getId());
-        inst.setStatus("RUNNING");
-        inst.setCurrentStepCodes("[]");
+        LocalDateTime now = LocalDateTime.now();
+        inst.setTenantId(tenantId);
+        inst.setStartedBy(TenantSupport.requireUserId());
+        inst.setStatus(PipeInstanceStatus.RUNNING.name());
+        inst.setOptionsJson("{\"arch\":false,\"ui\":false}");
         inst.setTotalDurationMs(0L);
-        inst.setTotalPromptTokens(0L);
-        inst.setTotalCompletionTokens(0L);
         inst.setTotalTokens(0L);
         inst.setStartedAt(now);
         inst.setCreatedAt(now);
         inst.setUpdatedAt(now);
+
+        if (hasIssue) {
+            IssIssue issue = issueService.requireOwned(req.getIssueId());
+            Long active = instanceMapper.selectCount(new LambdaQueryWrapper<PipeInstance>()
+                    .eq(PipeInstance::getIssueId, issue.getId())
+                    .in(PipeInstance::getStatus, PipeInstanceStatus.ACTIVE));
+            if (active != null && active > 0) {
+                throw new BizException("该问题单已有进行中的流水线，不能重复启动");
+            }
+            String defCode = StringUtils.hasText(req.getDefinitionCode())
+                    ? req.getDefinitionCode().trim() : "ISSUE_AUTO";
+            def = resolveDefinition(tenantId, defCode);
+            if (!"ISSUE_AUTO".equalsIgnoreCase(def.getCode())) {
+                throw new BizException("问题单仅支持 ISSUE_AUTO 流水定义");
+            }
+            // 修复节点需要业务仓
+            if (productService.listCodeRepos(issue.getProductId()).stream()
+                    .noneMatch(r -> !StringUtils.hasText(r.getRepoKind())
+                            || "BIZ".equalsIgnoreCase(r.getRepoKind())
+                            || "BOTH".equalsIgnoreCase(r.getRepoKind()))) {
+                throw new BizException("产品未配置业务代码仓，无法启动问题流水");
+            }
+            inst.setIssueId(issue.getId());
+            inst.setRequirementId(null);
+        } else {
+            ReqRequirement requirement = requireRequirement(req.getRequirementId(), tenantId);
+            Long active = instanceMapper.selectCount(new LambdaQueryWrapper<PipeInstance>()
+                    .eq(PipeInstance::getRequirementId, requirement.getId())
+                    .in(PipeInstance::getStatus, PipeInstanceStatus.ACTIVE));
+            if (active != null && active > 0) {
+                throw new BizException("该需求已有进行中的流水线，不能重复启动");
+            }
+            def = resolveDefinition(tenantId, req.getDefinitionCode());
+            inst.setRequirementId(requirement.getId());
+            inst.setIssueId(null);
+        }
+
+        inst.setDefinitionId(def.getId());
         instanceMapper.insert(inst);
 
-        SysProduct product = productService.requireOwned(requirement.getProductId());
-        productService.assertPipelineReady(product);
-        seedRawReqArtifact(requirement, product);
-        enterStep(inst, startDef, resolveHandler(requirement, startDef));
-        return toVo(instanceMapper.selectById(inst.getId()));
-    }
+        boolean issueAuto = "ISSUE_AUTO".equalsIgnoreCase(def.getCode());
+        List<PipeNodeDef> nodeDefs = nodeDefMapper.selectList(new LambdaQueryWrapper<PipeNodeDef>()
+                .eq(PipeNodeDef::getDefinitionId, def.getId())
+                .orderByAsc(PipeNodeDef::getSortOrder)
+                .orderByAsc(PipeNodeDef::getId));
+        List<Long> nodeDefIds = nodeDefs.stream().map(PipeNodeDef::getId).toList();
+        Map<Long, List<PipeUnitDef>> unitsByNode = nodeDefIds.isEmpty()
+                ? Map.of()
+                : unitDefMapper.selectList(new LambdaQueryWrapper<PipeUnitDef>()
+                                .in(PipeUnitDef::getNodeDefId, nodeDefIds)
+                                .orderByAsc(PipeUnitDef::getSortOrder))
+                        .stream()
+                        .collect(Collectors.groupingBy(PipeUnitDef::getNodeDefId));
 
-    /** 人工触发：准备任务会话 + kickoff 文案，前端再流式调用 Agent */
-    @Transactional
-    public com.lonple.dap.server.modules.pipeline.dto.PipelineAiPrepareVO prepareAi(
-            Long requirementId, Long stepInstanceId) {
-        PipeInstance inst = requireRunningInstance(requirementId);
-        PipeStepInstance step = requireStep(inst.getId(), stepInstanceId);
-        var prepared = aiRunnerProvider.getObject().prepare(step.getId());
-        prepared.setInstance(toVo(instanceMapper.selectById(inst.getId())));
-        return prepared;
-    }
-
-    /** 会话 done 后：落 Wiki 产物并推进（stream 未完成则拒绝） */
-    @Transactional
-    public PipelineInstanceVO finalizeAi(Long requirementId, Long stepInstanceId) {
-        PipeInstance inst = requireRunningInstance(requirementId);
-        requireStep(inst.getId(), stepInstanceId);
-        var payload = aiRunnerProvider.getObject().finalizeFromSession(stepInstanceId);
-        finishAiSuccess(stepInstanceId, payload.artifactId(), payload.reviewId(), 0, 0, 0);
-        return toVo(instanceMapper.selectById(inst.getId()));
-    }
-
-    /** 失败 / 待触发：回到 WAITING_TRIGGER */
-    @Transactional
-    public PipelineInstanceVO retryAiStep(Long requirementId, Long stepInstanceId) {
-        PipeInstance inst = requireRunningInstance(requirementId);
-        PipeStepInstance step = requireStep(inst.getId(), stepInstanceId);
-        if (!List.of("AI_GENERATE", "AI_REVIEW", "AI_REVISE").contains(step.getExecutor())) {
-            throw new BizException("仅 AI 步骤可重试");
-        }
-        if (!List.of("FAILED", "RUNNING", "WAITING_TRIGGER").contains(step.getStatus())) {
-            throw new BizException("当前状态不可重试：" + step.getStatus());
-        }
-        LocalDateTime now = LocalDateTime.now();
-        step.setStatus("WAITING_TRIGGER");
-        step.setErrorMessage(null);
-        step.setSessionId(null);
-        step.setFinishedAt(null);
-        step.setDurationMs(0L);
-        step.setUpdatedAt(now);
-        stepInstanceMapper.updateById(step);
-        inst.setStatus("WAITING_HUMAN");
-        inst.setWaitingReason("TRIGGER_AI");
-        inst.setCurrentStepCodes(writeJson(List.of(step.getStepCode())));
-        inst.setUpdatedAt(now);
-        instanceMapper.updateById(inst);
-        return toVo(instanceMapper.selectById(inst.getId()));
-    }
-
-    @Transactional
-    public void finishAiSuccess(Long stepInstanceId, Long artifactId, Long reviewId,
-                                long promptTokens, long completionTokens, long totalTokens) {
-        PipeStepInstance step = stepInstanceMapper.selectById(stepInstanceId);
-        if (step == null || !"RUNNING".equals(step.getStatus())) {
-            return;
-        }
-        PipeInstance inst = instanceMapper.selectById(step.getInstanceId());
-        if (inst == null || !List.of("RUNNING", "WAITING_HUMAN").contains(inst.getStatus())) {
-            return;
-        }
-        LocalDateTime now = LocalDateTime.now();
-        PipelineUsageRequest usage = new PipelineUsageRequest();
-        usage.setPromptTokens(promptTokens);
-        usage.setCompletionTokens(completionTokens);
-        usage.setTotalTokens(totalTokens);
-        addUsage(step, usage);
-        finishStepTiming(step, now);
-        step.setStatus("SUCCEEDED");
-        step.setOutputArtifactId(artifactId);
-        step.setReviewId(reviewId);
-        step.setErrorMessage(null);
-        step.setUpdatedAt(now);
-        stepInstanceMapper.updateById(step);
-        advance(inst, step.getStepCode(), "SUCCESS");
-        refreshInstanceTotals(inst.getId());
-    }
-
-    @Transactional
-    public void markAiFailed(Long stepInstanceId, String errorMessage) {
-        PipeStepInstance step = stepInstanceMapper.selectById(stepInstanceId);
-        if (step == null) {
-            return;
-        }
-        if (!"RUNNING".equals(step.getStatus())) {
-            return;
-        }
-        LocalDateTime now = LocalDateTime.now();
-        finishStepTiming(step, now);
-        step.setStatus("FAILED");
-        step.setErrorMessage(errorMessage);
-        step.setUpdatedAt(now);
-        stepInstanceMapper.updateById(step);
-        PipeInstance inst = instanceMapper.selectById(step.getInstanceId());
-        if (inst != null) {
-            inst.setWaitingReason("AI_FAILED");
-            inst.setUpdatedAt(now);
-            // 保持 RUNNING，允许重试；不整条 CANCELLED
-            if (!"CANCELLED".equals(inst.getStatus()) && !"DONE".equals(inst.getStatus())) {
-                inst.setStatus("RUNNING");
+        for (PipeNodeDef nd : nodeDefs) {
+            PipeNodeInstance ni = new PipeNodeInstance();
+            ni.setInstanceId(inst.getId());
+            ni.setNodeCode(nd.getCode());
+            ni.setNodeName(nd.getName());
+            ni.setKind(nd.getKind());
+            ni.setOptionalFlag(Boolean.TRUE.equals(nd.getOptionalFlag()));
+            ni.setEnabledFlag(true);
+            ni.setSortOrder(nd.getSortOrder() == null ? 0 : nd.getSortOrder());
+            if (issueAuto) {
+                if ("issue_analyze".equals(nd.getCode())) {
+                    ni.setStatus("WAITING_TRIGGER");
+                } else if ("done".equals(nd.getCode())) {
+                    ni.setStatus("PENDING");
+                } else {
+                    ni.setStatus("PENDING");
+                }
+            } else if ("pm_first".equals(nd.getCode())) {
+                ni.setStatus("SUCCEEDED");
+                ni.setStartedAt(now);
+                ni.setFinishedAt(now);
+            } else if ("ai_pre".equals(nd.getCode())) {
+                ni.setStatus("WAITING_TRIGGER");
+            } else {
+                ni.setStatus("PENDING");
             }
-            instanceMapper.updateById(inst);
-            refreshInstanceTotals(inst.getId());
+            nodeInstanceMapper.insert(ni);
+
+            List<PipeUnitDef> uds = unitsByNode.getOrDefault(nd.getId(), List.of());
+            for (PipeUnitDef ud : uds) {
+                PipeUnitInstance ui = new PipeUnitInstance();
+                ui.setNodeInstanceId(ni.getId());
+                ui.setInstanceId(inst.getId());
+                ui.setUnitCode(ud.getCode());
+                ui.setUnitName(ud.getName());
+                ui.setPositionCode(ud.getPositionCode());
+                ui.setTaskTypeCode(ud.getTaskTypeCode());
+                ui.setRoundTier(ud.getRoundTier());
+                ui.setMaxRound(ud.getMaxRound());
+                ui.setConfirmRound(0);
+                ui.setRepoKind(ud.getRepoKind() == null ? "NONE" : ud.getRepoKind());
+                if (issueAuto && "issue_analyze".equals(nd.getCode())) {
+                    ui.setStatus("WAITING_TRIGGER");
+                } else if (!issueAuto && "ai_pre".equals(nd.getCode())) {
+                    ui.setStatus("WAITING_TRIGGER");
+                } else if (!issueAuto && "pm_first".equals(nd.getCode())) {
+                    ui.setStatus("SUCCEEDED");
+                } else {
+                    ui.setStatus("PENDING");
+                }
+                unitInstanceMapper.insert(ui);
+            }
         }
+
+        if (hasIssue) {
+            IssIssue issue = issueService.requireOwned(req.getIssueId());
+            SysProduct product = productService.requireOwned(issue.getProductId());
+            wikiFsService.ensureIssueTicketMarkdown(product, issue);
+            wikiFsService.ensureBuiltinTemplateFile("问题原因分析模板.md");
+        }
+
+        Long instanceId = inst.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    pipeRuntimeService.bootstrapAfterStart(instanceId);
+                }
+            });
+        } else {
+            pipeRuntimeService.bootstrapAfterStart(instanceId);
+        }
+        return instanceId;
+    }
+
+    public PipelineInstanceVO getByRequirement(Long requirementId) {
+        Long tenantId = TenantSupport.requireTenantId();
+        ReqRequirement requirement = requireRequirement(requirementId, tenantId);
+        PipeInstance inst = instanceMapper.selectOne(new LambdaQueryWrapper<PipeInstance>()
+                .eq(PipeInstance::getRequirementId, requirementId)
+                .orderByDesc(PipeInstance::getId)
+                .last("LIMIT 1"));
+        if (inst == null) {
+            return null;
+        }
+        return toVo(inst, requirement, null);
+    }
+
+    public PipelineInstanceVO getByIssue(Long issueId) {
+        Long tenantId = TenantSupport.requireTenantId();
+        IssIssue issue = issueService.requireOwned(issueId);
+        PipeInstance inst = instanceMapper.selectOne(new LambdaQueryWrapper<PipeInstance>()
+                .eq(PipeInstance::getIssueId, issueId)
+                .orderByDesc(PipeInstance::getId)
+                .last("LIMIT 1"));
+        if (inst == null) {
+            return null;
+        }
+        return toVo(inst, null, issue);
+    }
+
+    public PipelineInstanceVO get(Long instanceId) {
+        Long tenantId = TenantSupport.requireTenantId();
+        PipeInstance inst = requireInstance(instanceId, tenantId);
+        if (inst.getIssueId() != null) {
+            return toVo(inst, null, issueService.requireOwned(inst.getIssueId()));
+        }
+        ReqRequirement requirement = requireRequirement(inst.getRequirementId(), tenantId);
+        return toVo(inst, requirement, null);
     }
 
     @Transactional
-    public PipelineInstanceVO cancel(Long requirementId) {
-        PipeInstance inst = requireRunningInstance(requirementId);
+    public void cancel(Long instanceId) {
+        Long tenantId = TenantSupport.requireTenantId();
+        PipeInstance inst = requireInstance(instanceId, tenantId);
+        if (PipeInstanceStatus.DONE.name().equals(inst.getStatus())
+                || PipeInstanceStatus.CANCELLED.name().equals(inst.getStatus())) {
+            throw new BizException("流水线已结束，无法取消");
+        }
         LocalDateTime now = LocalDateTime.now();
-        List<PipeStepInstance> open = stepInstanceMapper.selectList(new LambdaQueryWrapper<PipeStepInstance>()
-                .eq(PipeStepInstance::getInstanceId, inst.getId())
-                .in(PipeStepInstance::getStatus, List.of("RUNNING", "WAITING_HUMAN", "PENDING")));
-        for (PipeStepInstance step : open) {
-            finishStepTiming(step, now);
-            step.setStatus("CANCELLED");
-            step.setUpdatedAt(now);
-            stepInstanceMapper.updateById(step);
-        }
-        inst.setStatus("CANCELLED");
+        inst.setStatus(PipeInstanceStatus.CANCELLED.name());
         inst.setFinishedAt(now);
-        inst.setCurrentStepCodes("[]");
-        inst.setWaitingReason(null);
         inst.setUpdatedAt(now);
-        refreshInstanceTotals(inst.getId());
-        instanceMapper.updateById(instanceMapper.selectById(inst.getId()));
-        return toVo(instanceMapper.selectById(inst.getId()));
-    }
-
-    @Transactional
-    public PipelineInstanceVO approveStep(Long requirementId, Long stepInstanceId, PipelineStepGateRequest req) {
-        return gateStep(requirementId, stepInstanceId, true, req);
-    }
-
-    @Transactional
-    public PipelineInstanceVO rejectStep(Long requirementId, Long stepInstanceId, PipelineStepGateRequest req) {
-        return gateStep(requirementId, stepInstanceId, false, req);
+        inst.setWaitingReason("用户取消自动化");
+        instanceMapper.updateById(inst);
     }
 
     /**
-     * AI 步骤完成（Agent 跑完或调试跳过）。写入耗时；可选累加 token。
+     * 二审：版本/时间 + 是否启用架构/UI；PASS 挂起，PASS_AND_DEV 打开 gen_prd。
      */
     @Transactional
-    public PipelineInstanceVO completeAiStep(Long requirementId, Long stepInstanceId, PipelineUsageRequest usage) {
-        PipeInstance inst = requireRunningInstance(requirementId);
-        PipeStepInstance step = requireStep(inst.getId(), stepInstanceId);
-        if (!List.of("RUNNING", "WAITING_HUMAN", "WAITING_TRIGGER", "FAILED").contains(step.getStatus())) {
-            throw new BizException("步骤当前不可完成：" + step.getStatus());
+    public void pmSecond(Long instanceId, PipelinePmSecondRequest req) {
+        Long tenantId = TenantSupport.requireTenantId();
+        PipeInstance inst = requireInstance(instanceId, tenantId);
+        PipeNodeInstance second = nodeInstanceMapper.selectOne(new LambdaQueryWrapper<PipeNodeInstance>()
+                .eq(PipeNodeInstance::getInstanceId, instanceId)
+                .eq(PipeNodeInstance::getNodeCode, "pm_second"));
+        if (second == null) {
+            throw new BizException("缺少产品经理二审节点");
         }
-        if (!List.of("AI_GENERATE", "AI_REVIEW", "AI_REVISE").contains(step.getExecutor())) {
-            throw new BizException("仅 AI 步骤可调用 complete");
-        }
-        LocalDateTime now = LocalDateTime.now();
-        addUsage(step, usage);
-        finishStepTiming(step, now);
-        step.setStatus("SUCCEEDED");
-        step.setUpdatedAt(now);
-        stepInstanceMapper.updateById(step);
-        advance(inst, step.getStepCode(), "SUCCESS");
-        refreshInstanceTotals(inst.getId());
-        return toVo(instanceMapper.selectById(inst.getId()));
-    }
-
-    /** 会话结束后累加 token（不结束步骤） */
-    @Transactional
-    public void addUsageBySession(Long sessionId, long prompt, long completion, long total) {
-        if (sessionId == null) {
-            return;
-        }
-        PipeStepInstance step = stepInstanceMapper.selectOne(new LambdaQueryWrapper<PipeStepInstance>()
-                .eq(PipeStepInstance::getSessionId, sessionId)
-                .in(PipeStepInstance::getStatus, List.of("RUNNING", "WAITING_HUMAN"))
-                .orderByDesc(PipeStepInstance::getId)
-                .last("LIMIT 1"));
-        if (step != null) {
-            addUsageToStep(step, prompt, completion, total);
-        }
-    }
-
-    @Transactional
-    public void addUsageByStepInstance(Long stepInstanceId, long prompt, long completion, long total) {
-        if (stepInstanceId == null) {
-            return;
-        }
-        PipeStepInstance step = stepInstanceMapper.selectById(stepInstanceId);
-        if (step == null) {
-            return;
-        }
-        addUsageToStep(step, prompt, completion, total);
-    }
-
-    private void addUsageToStep(PipeStepInstance step, long prompt, long completion, long total) {
-        PipelineUsageRequest u = new PipelineUsageRequest();
-        u.setPromptTokens(prompt);
-        u.setCompletionTokens(completion);
-        u.setTotalTokens(total > 0 ? total : prompt + completion);
-        addUsage(step, u);
-        step.setUpdatedAt(LocalDateTime.now());
-        stepInstanceMapper.updateById(step);
-        refreshInstanceTotals(step.getInstanceId());
-    }
-
-    @Transactional
-    public void bindSession(Long stepInstanceId, Long sessionId) {
-        PipeStepInstance step = stepInstanceMapper.selectById(stepInstanceId);
-        if (step == null) {
-            return;
-        }
-        step.setSessionId(sessionId);
-        step.setUpdatedAt(LocalDateTime.now());
-        stepInstanceMapper.updateById(step);
-    }
-
-    private PipelineInstanceVO gateStep(Long requirementId, Long stepInstanceId, boolean approve,
-                                       PipelineStepGateRequest req) {
-        PipeInstance inst = requireRunningInstance(requirementId);
-        PipeStepInstance step = requireStep(inst.getId(), stepInstanceId);
-        if (!"WAITING_HUMAN".equals(step.getStatus()) && !"HUMAN_APPROVE".equals(step.getExecutor())) {
-            throw new BizException("步骤不在人闸等待中");
-        }
-        Long userId = TenantSupport.requireUserId();
-        PipeStepAssignee assignee = assigneeMapper.selectOne(new LambdaQueryWrapper<PipeStepAssignee>()
-                .eq(PipeStepAssignee::getStepInstanceId, step.getId())
-                .eq(PipeStepAssignee::getUserId, userId));
-        if (assignee == null && step.getHandlerUserId() != null
-                && !Objects.equals(step.getHandlerUserId(), userId)) {
-            throw new BizException("你不是本步骤处理人");
-        }
-        LocalDateTime now = LocalDateTime.now();
-        if (assignee != null) {
-            assignee.setStatus(approve ? "APPROVED" : "REJECTED");
-            assignee.setActedAt(now);
-            assignee.setCommentText(req != null ? req.getComment() : null);
-            assigneeMapper.updateById(assignee);
-        }
-        if (!approve) {
-            finishStepTiming(step, now);
-            step.setStatus("FAILED");
-            step.setErrorMessage(req != null && StringUtils.hasText(req.getComment())
-                    ? req.getComment().trim() : "已驳回");
-            step.setUpdatedAt(now);
-            stepInstanceMapper.updateById(step);
-            inst.setStatus("CANCELLED");
-            inst.setFinishedAt(now);
-            inst.setWaitingReason(null);
-            inst.setCurrentStepCodes("[]");
-            inst.setUpdatedAt(now);
-            refreshInstanceTotals(inst.getId());
-            PipeInstance latest = instanceMapper.selectById(inst.getId());
-            latest.setStatus("CANCELLED");
-            latest.setFinishedAt(now);
-            latest.setWaitingReason(null);
-            latest.setCurrentStepCodes("[]");
-            latest.setUpdatedAt(now);
-            instanceMapper.updateById(latest);
-            return toVo(latest);
-        }
-        finishStepTiming(step, now);
-        step.setStatus("SUCCEEDED");
-        step.setUpdatedAt(now);
-        stepInstanceMapper.updateById(step);
-        advance(inst, step.getStepCode(), "APPROVE");
-        refreshInstanceTotals(inst.getId());
-        return toVo(instanceMapper.selectById(inst.getId()));
-    }
-
-    private void advance(PipeInstance inst, String fromCode, String event) {
-        List<PipeTransition> edges = transitionMapper.selectList(new LambdaQueryWrapper<PipeTransition>()
-                .eq(PipeTransition::getDefinitionId, inst.getDefinitionId())
-                .eq(PipeTransition::getFromStepCode, fromCode)
-                .eq(PipeTransition::getEvent, event)
-                .orderByAsc(PipeTransition::getPriority));
-        if (edges.isEmpty()) {
-            if ("PIPELINE_DONE".equals(fromCode) || "SYSTEM".equals(fromCode)) {
-                completeInstance(inst);
+        if (!"WAITING_HUMAN".equals(second.getStatus()) && !"PENDING".equals(second.getStatus())
+                && !"WAITING_TRIGGER".equals(second.getStatus())) {
+            // ai_pre 未完成时不允许二审
+            PipeNodeInstance aiPre = nodeInstanceMapper.selectOne(new LambdaQueryWrapper<PipeNodeInstance>()
+                    .eq(PipeNodeInstance::getInstanceId, instanceId)
+                    .eq(PipeNodeInstance::getNodeCode, "ai_pre"));
+            if (aiPre == null || !"SUCCEEDED".equals(aiPre.getStatus())) {
+                throw new BizException("请先完成 AI 初审后再二审");
             }
-            return;
         }
-        PipeTransition edge = edges.getFirst();
-        if ("PIPELINE_DONE".equals(edge.getToStepCode())) {
-            PipeStepDef doneDef = stepDefMapper.selectOne(new LambdaQueryWrapper<PipeStepDef>()
-                    .eq(PipeStepDef::getDefinitionId, inst.getDefinitionId())
-                    .eq(PipeStepDef::getCode, "PIPELINE_DONE"));
-            if (doneDef != null) {
-                PipeStepInstance done = createStepRow(inst, doneDef, null);
-                LocalDateTime now = LocalDateTime.now();
-                done.setStatus("SUCCEEDED");
-                done.setStartedAt(now);
-                done.setFinishedAt(now);
-                done.setDurationMs(0L);
-                done.setUpdatedAt(now);
-                stepInstanceMapper.updateById(done);
-            }
-            completeInstance(inst);
-            return;
-        }
-        PipeStepDef next = stepDefMapper.selectOne(new LambdaQueryWrapper<PipeStepDef>()
-                .eq(PipeStepDef::getDefinitionId, inst.getDefinitionId())
-                .eq(PipeStepDef::getCode, edge.getToStepCode()));
-        if (next == null) {
-            throw new BizException("下一跳步骤定义缺失：" + edge.getToStepCode());
-        }
-        ReqRequirement requirement = requirementMapper.selectById(inst.getRequirementId());
-        enterStep(inst, next, resolveHandler(requirement, next));
-    }
 
-    private void enterStep(PipeInstance inst, PipeStepDef def, Long handlerUserId) {
-        PipeStepInstance step = createStepRow(inst, def, handlerUserId);
+        try {
+            ObjectNode opt = objectMapper.createObjectNode();
+            opt.put("arch", req.isEnableArch());
+            opt.put("ui", req.isEnableUi());
+            inst.setOptionsJson(objectMapper.writeValueAsString(opt));
+        } catch (Exception e) {
+            throw new BizException("写入二审选项失败");
+        }
+        inst.setReleaseVersionId(req.getReleaseVersionId());
+        inst.setReleaseTime(req.getReleaseTime() != null ? req.getReleaseTime() : LocalDateTime.now());
         LocalDateTime now = LocalDateTime.now();
-        step.setStartedAt(now);
-        step.setUpdatedAt(now);
+        inst.setUpdatedAt(now);
 
-        if ("HUMAN_APPROVE".equals(def.getExecutor())) {
-            step.setStatus("WAITING_HUMAN");
-            stepInstanceMapper.updateById(step);
-            PipeStepAssignee a = new PipeStepAssignee();
-            a.setStepInstanceId(step.getId());
-            a.setUserId(handlerUserId != null ? handlerUserId : TenantSupport.requireUserId());
-            a.setStatus("PENDING");
-            assigneeMapper.insert(a);
-            inst.setStatus("WAITING_HUMAN");
-            inst.setWaitingReason("APPROVE");
-            inst.setCurrentStepCodes(writeJson(List.of(def.getCode())));
-            inst.setUpdatedAt(now);
+        second.setStatus("SUCCEEDED");
+        second.setFinishedAt(now);
+        if (second.getStartedAt() == null) {
+            second.setStartedAt(now);
+        }
+        nodeInstanceMapper.updateById(second);
+
+        // 选定版本后：Wiki 产品下建版本目录，迁入需求文件夹，并刷新前置单元会话引用
+        ReqRequirement requirement = requireRequirement(inst.getRequirementId(), tenantId);
+        SysProductVersion releaseVersion = productService.requireVersionOfProduct(
+                requirement.getProductId(), req.getReleaseVersionId());
+        requirement.setReleaseVersion(releaseVersion.getVersion());
+        requirement.setUpdatedAt(now);
+        requirementMapper.updateById(requirement);
+        promoteWikiToReleaseVersion(inst, requirement, releaseVersion.getVersion());
+
+        // 可选节点启用标记
+        markOptionalEnabled(instanceId, "gen_arch", req.isEnableArch());
+        markOptionalEnabled(instanceId, "gen_ui", req.isEnableUi());
+        markOptionalEnabled(instanceId, "arch_review", req.isEnableArch());
+        markOptionalEnabled(instanceId, "ui_review", req.isEnableUi());
+
+        String action = req.getAction().trim().toUpperCase();
+        if ("PASS".equals(action)) {
+            inst.setStatus(PipeInstanceStatus.SUSPENDED.name());
+            inst.setWaitingReason("二审仅通过，流水线挂起");
             instanceMapper.updateById(inst);
             return;
         }
-        if ("SYSTEM".equals(def.getExecutor()) || "PIPELINE_DONE".equals(def.getCode())) {
-            step.setStatus("SUCCEEDED");
-            step.setFinishedAt(now);
-            step.setDurationMs(0L);
-            stepInstanceMapper.updateById(step);
-            completeInstance(inst);
-            return;
+        if (!"PASS_AND_DEV".equals(action)) {
+            throw new BizException("action 仅支持 PASS 或 PASS_AND_DEV");
         }
-        // AI 步骤：开发阶段须人工点「执行」才 kickoff
-        step.setStatus("WAITING_TRIGGER");
-        stepInstanceMapper.updateById(step);
-        inst.setStatus("WAITING_HUMAN");
-        inst.setWaitingReason("TRIGGER_AI");
-        inst.setCurrentStepCodes(writeJson(List.of(def.getCode())));
-        inst.setUpdatedAt(now);
+
+        inst.setStatus(PipeInstanceStatus.RUNNING.name());
+        inst.setWaitingReason(null);
         instanceMapper.updateById(inst);
-    }
 
-    private void seedRawReqArtifact(ReqRequirement requirement, SysProduct product) {
-        try {
-            if (artifactService.findCurrent(requirement.getId(), "RAW_REQ") != null) {
-                return;
+        PipeNodeInstance genPrd = nodeInstanceMapper.selectOne(new LambdaQueryWrapper<PipeNodeInstance>()
+                .eq(PipeNodeInstance::getInstanceId, instanceId)
+                .eq(PipeNodeInstance::getNodeCode, "gen_prd"));
+        if (genPrd != null) {
+            genPrd.setStatus("WAITING_TRIGGER");
+            genPrd.setStartedAt(now);
+            nodeInstanceMapper.updateById(genPrd);
+            List<PipeUnitInstance> units = unitInstanceMapper.selectList(new LambdaQueryWrapper<PipeUnitInstance>()
+                    .eq(PipeUnitInstance::getNodeInstanceId, genPrd.getId()));
+            for (PipeUnitInstance u : units) {
+                u.setStatus("WAITING_TRIGGER");
+                unitInstanceMapper.updateById(u);
+                pipeRuntimeService.enqueueRunUnit(u.getId());
             }
-            Long reqDirId = wikiFsService.ensureRequirementDir(product.getWikiNodeId(), requirement);
-            SysWikiNode raw = wikiFsService.findChildFile(reqDirId, WikiFsService.DEFAULT_REQ_MARKDOWN_NAME);
-            if (raw != null) {
-                artifactService.register(requirement.getId(), "RAW_REQ", raw.getId(), null, "原始需求");
+        }
+    }
+
+    /**
+     * 仅编码/集成测试环节调用：按需求号 feat/ 或问题单号 fix/ 建分支 + worktree。
+     */
+    @Transactional
+    public List<PipeRepoWorktree> ensureWorktrees(Long instanceId) {
+        Long tenantId = TenantSupport.requireTenantId();
+        PipeInstance inst = requireInstance(instanceId, tenantId);
+        if (inst.getIssueId() != null) {
+            return ensureWorktreesForIssue(inst, issueService.requireOwned(inst.getIssueId()));
+        }
+        ReqRequirement requirement = requireRequirement(inst.getRequirementId(), tenantId);
+        return ensureWorktrees(inst, requirement);
+    }
+
+    public List<String> listWorktreePaths(Long instanceId, String repoKind) {
+        List<PipeRepoWorktree> rows = worktreeMapper.selectList(new LambdaQueryWrapper<PipeRepoWorktree>()
+                .eq(PipeRepoWorktree::getInstanceId, instanceId)
+                .orderByAsc(PipeRepoWorktree::getId));
+        List<String> paths = new ArrayList<>();
+        for (PipeRepoWorktree w : rows) {
+            if (!StringUtils.hasText(repoKind) || "NONE".equalsIgnoreCase(repoKind)
+                    || repoKind.equalsIgnoreCase(w.getRepoKind())) {
+                paths.add(w.getWorktreePath());
             }
-        } catch (Exception e) {
-            log.warn("seed RAW_REQ failed reqId={}: {}", requirement.getId(), e.getMessage());
         }
+        // 编码默认至少要有业务仓；测试任务要有测试仓，否则回退全部
+        if (paths.isEmpty()) {
+            for (PipeRepoWorktree w : rows) {
+                paths.add(w.getWorktreePath());
+            }
+        }
+        return paths;
     }
 
-    private PipeStepInstance createStepRow(PipeInstance inst, PipeStepDef def, Long handlerUserId) {
-        LocalDateTime now = LocalDateTime.now();
-        PipeStepInstance step = new PipeStepInstance();
-        step.setInstanceId(inst.getId());
-        step.setStepCode(def.getCode());
-        step.setStepName(def.getName());
-        step.setStatus("PENDING");
-        step.setRound(1);
-        step.setExecutor(def.getExecutor());
-        step.setHandlerUserId(handlerUserId);
-        step.setDurationMs(0L);
-        step.setPromptTokens(0L);
-        step.setCompletionTokens(0L);
-        step.setTotalTokens(0L);
-        step.setCreatedAt(now);
-        step.setUpdatedAt(now);
-        stepInstanceMapper.insert(step);
-        return step;
-    }
+    /**
+     * 打开流水线相关文档：优先 Wiki；未发布时回退个人空间可见产出（hidden 文件不可开）。
+     */
+    public WikiFileContentVO openWikiDoc(Long instanceId, String fileName) {
+        if (!StringUtils.hasText(fileName)) {
+            throw new BizException("文件名不能为空");
+        }
+        Long tenantId = TenantSupport.requireTenantId();
+        PipeInstance inst = requireInstance(instanceId, tenantId);
+        IssIssue issue = inst.getIssueId() == null ? null : issueService.requireOwned(inst.getIssueId());
+        ReqRequirement requirement = issue != null
+                ? null
+                : requireRequirement(inst.getRequirementId(), tenantId);
+        Long productId = issue != null ? issue.getProductId() : requirement.getProductId();
+        String name = fileName.trim();
+        if (!name.contains(".")) {
+            name = name + ".md";
+        }
 
-    private void completeInstance(PipeInstance inst) {
-        LocalDateTime now = LocalDateTime.now();
-        PipeInstance latest = instanceMapper.selectById(inst.getId());
-        latest.setStatus("DONE");
-        latest.setFinishedAt(now);
-        latest.setWaitingReason(null);
-        latest.setCurrentStepCodes("[]");
-        latest.setUpdatedAt(now);
-        instanceMapper.updateById(latest);
-        refreshInstanceTotals(latest.getId());
-    }
+        List<String> candidates = docNameCandidates(name);
 
-    private void finishStepTiming(PipeStepInstance step, LocalDateTime now) {
-        if (step.getStartedAt() == null) {
-            step.setStartedAt(now);
+        // 优先个人空间产出（含 hidden 确认档，工作台主动点开可读）
+        WikiFileContentVO fromPersonal = openFromPersonalOutput(inst.getId(), name);
+        if (fromPersonal != null) {
+            return fromPersonal;
         }
-        step.setFinishedAt(now);
-        long ms = Duration.between(step.getStartedAt(), now).toMillis();
-        if (ms < 0) {
-            ms = 0;
-        }
-        step.setDurationMs(ms);
-    }
 
-    private void addUsage(PipeStepInstance step, PipelineUsageRequest usage) {
-        if (usage == null) {
-            return;
-        }
-        long p = nvl(usage.getPromptTokens());
-        long c = nvl(usage.getCompletionTokens());
-        long t = nvl(usage.getTotalTokens());
-        if (t <= 0) {
-            t = p + c;
-        }
-        step.setPromptTokens(nvl(step.getPromptTokens()) + p);
-        step.setCompletionTokens(nvl(step.getCompletionTokens()) + c);
-        step.setTotalTokens(nvl(step.getTotalTokens()) + t);
-    }
-
-    private void refreshInstanceTotals(Long instanceId) {
-        List<PipeStepInstance> steps = stepInstanceMapper.selectList(new LambdaQueryWrapper<PipeStepInstance>()
-                .eq(PipeStepInstance::getInstanceId, instanceId));
-        long dur = 0;
-        long pt = 0;
-        long ct = 0;
-        long tt = 0;
-        for (PipeStepInstance s : steps) {
-            dur += nvl(s.getDurationMs());
-            pt += nvl(s.getPromptTokens());
-            ct += nvl(s.getCompletionTokens());
-            tt += nvl(s.getTotalTokens());
-        }
-        PipeInstance inst = instanceMapper.selectById(instanceId);
-        inst.setTotalDurationMs(dur);
-        inst.setTotalPromptTokens(pt);
-        inst.setTotalCompletionTokens(ct);
-        inst.setTotalTokens(tt);
-        inst.setUpdatedAt(LocalDateTime.now());
-        instanceMapper.updateById(inst);
-    }
-
-    private Long resolveHandler(ReqRequirement requirement, PipeStepDef def) {
-        if (requirement == null) {
-            return TenantSupport.requireUserId();
-        }
-        String role = def.getHumanRole();
-        if ("PM".equals(role)) {
+        // 已发布 Wiki 节点直读（按文件名匹配单元正式产出）
+        for (PipeUnitInstance u : unitInstanceMapper.selectList(new LambdaQueryWrapper<PipeUnitInstance>()
+                .eq(PipeUnitInstance::getInstanceId, inst.getId()))) {
+            if (u.getOutputWikiNodeId() == null) {
+                continue;
+            }
             try {
-                SysProduct product = productService.requireOwned(requirement.getProductId());
-                if (product.getManagerUserId() != null) {
-                    return product.getManagerUserId();
+                PipeUnitMaterialSpec spec = PipeUnitMaterialCatalog.require(u.getTaskTypeCode());
+                if (nameMatchesUnitDoc(candidates, spec)) {
+                    return wikiFsService.readFile(u.getOutputWikiNodeId());
                 }
             } catch (Exception ignored) {
-                // fall through
-            }
-            if (requirement.getApproverId() != null) {
-                return requirement.getApproverId();
+                // try next
             }
         }
-        if (requirement.getCurrentHandlerId() != null) {
-            return requirement.getCurrentHandlerId();
+
+        SysProduct product = productService.requireOwned(productId);
+        if (product.getWikiNodeId() != null && issue != null && StringUtils.hasText(issue.getIssueNo())) {
+            SysWikiNode issuesRoot = wikiFsService.findChildDirectory(product.getWikiNodeId(), "issues");
+            if (issuesRoot != null) {
+                SysWikiNode issueDir = wikiFsService.findChildDirectory(issuesRoot.getId(), issue.getIssueNo());
+                if (issueDir != null) {
+                    for (String cand : candidates) {
+                        SysWikiNode inIssue = wikiFsService.findChildFile(issueDir.getId(), cand);
+                        if (inIssue != null) {
+                            return toWikiContent(inIssue);
+                        }
+                    }
+                }
+            }
         }
-        return requirement.getCreatedBy() != null ? requirement.getCreatedBy() : TenantSupport.requireUserId();
+        if (product.getWikiNodeId() != null && requirement != null) {
+            // 只查找、不 ensure 创建，避免打开文档时误建「产品/需求编号」旧目录
+            SysWikiNode rawRoot = wikiFsService.findChildDirectory(product.getWikiNodeId(), "原始需求");
+            if (rawRoot != null) {
+                SysWikiNode rawReq = wikiFsService.findChildDirectory(rawRoot.getId(), requirement.getReqNo());
+                if (rawReq != null) {
+                    for (String cand : candidates) {
+                        SysWikiNode inRaw = wikiFsService.findChildFile(rawReq.getId(), cand);
+                        if (inRaw != null) {
+                            return toWikiContent(inRaw);
+                        }
+                    }
+                }
+            }
+            String planVer = null;
+            if (inst.getReleaseVersionId() != null) {
+                try {
+                    planVer = productService.requireVersionOfProduct(
+                            product.getId(), inst.getReleaseVersionId()).getVersion();
+                } catch (Exception ignored) {
+                    // ignore
+                }
+            }
+            if (!StringUtils.hasText(planVer) && StringUtils.hasText(requirement.getReleaseVersion())) {
+                planVer = requirement.getReleaseVersion();
+            }
+            if (StringUtils.hasText(planVer)) {
+                SysWikiNode verRoot = wikiFsService.findChildDirectory(product.getWikiNodeId(), planVer.trim());
+                if (verRoot != null) {
+                    SysWikiNode verReq = wikiFsService.findChildDirectory(verRoot.getId(), requirement.getReqNo());
+                    if (verReq != null) {
+                        for (String cand : candidates) {
+                            SysWikiNode inVer = wikiFsService.findChildFile(verReq.getId(), cand);
+                            if (inVer != null) {
+                                return toWikiContent(inVer);
+                            }
+                        }
+                    }
+                }
+            }
+            // 兼容旧布局：{产品}/{需求}（仅查找）
+            SysWikiNode legacyReq = wikiFsService.findChildDirectory(
+                    product.getWikiNodeId(), requirement.getReqNo());
+            if (legacyReq != null) {
+                for (String cand : candidates) {
+                    SysWikiNode inReq = wikiFsService.findChildFile(legacyReq.getId(), cand);
+                    if (inReq != null) {
+                        return toWikiContent(inReq);
+                    }
+                }
+            }
+            for (String cand : candidates) {
+                SysWikiNode inProduct = wikiFsService.findChildFile(product.getWikiNodeId(), cand);
+                if (inProduct != null) {
+                    return toWikiContent(inProduct);
+                }
+            }
+        }
+        SysWikiNode templateRoot = wikiFsService.findTopLevelDir(tenantId, "模板");
+        if (templateRoot != null) {
+            for (String cand : candidates) {
+                SysWikiNode inTpl = wikiFsService.findChildFile(templateRoot.getId(), cand);
+                if (inTpl != null) {
+                    return toWikiContent(inTpl);
+                }
+            }
+            for (SysWikiNode dir : wikiFsService.listChildDirs(templateRoot.getId())) {
+                for (String cand : candidates) {
+                    SysWikiNode f = wikiFsService.findChildFile(dir.getId(), cand);
+                    if (f != null) {
+                        return toWikiContent(f);
+                    }
+                }
+            }
+        }
+
+        // 问题流水：点开输入/模板时按需物化，避免旧实例未写过「问题单.md」只能整段重跑
+        if (issue != null) {
+            if (candidates.stream().anyMatch(c -> WikiFsService.DEFAULT_ISSUE_MARKDOWN_NAME.equals(c))) {
+                SysProduct p = productService.requireOwned(productId);
+                wikiFsService.ensureIssueTicketMarkdown(p, issue);
+                Long issueDirId = wikiFsService.ensureIssuePublishDir(p, issue.getIssueNo());
+                SysWikiNode ticket = wikiFsService.findChildFile(
+                        issueDirId, WikiFsService.DEFAULT_ISSUE_MARKDOWN_NAME);
+                if (ticket != null) {
+                    return toWikiContent(ticket);
+                }
+            }
+            if (candidates.stream().anyMatch(c -> "问题原因分析模板.md".equals(c))) {
+                Long tplId = wikiFsService.ensureBuiltinTemplateFile("问题原因分析模板.md");
+                return wikiFsService.readFile(tplId);
+            }
+        }
+
+        throw new BizException("未找到文档：" + name
+                + "（问题修复输入「问题原因分析.md」需先完成并发布「问题定位分析」节点；"
+                + "也可对该节点点「重新执行」后发布）");
     }
 
-    private PipeDefinition requireDefaultDefinition() {
-        PipeDefinition def = definitionMapper.selectOne(new LambdaQueryWrapper<PipeDefinition>()
-                .eq(PipeDefinition::getCode, "RD_AUTO")
+    /** 在流水线各单元会话输出目录中查找文件（含 hidden，供工作台点开） */
+    private WikiFileContentVO openFromPersonalOutput(Long instanceId, String name) {
+        List<PipeUnitInstance> units = unitInstanceMapper.selectList(new LambdaQueryWrapper<PipeUnitInstance>()
+                .eq(PipeUnitInstance::getInstanceId, instanceId));
+        List<String> candidates = docNameCandidates(name);
+        for (PipeUnitInstance u : units) {
+            PipeUnitMaterialSpec spec = null;
+            try {
+                spec = PipeUnitMaterialCatalog.require(u.getTaskTypeCode());
+            } catch (Exception ignored) {
+                // ignore
+            }
+            // 请求名命中本单元正式/确认产出时，优先按已记录的 nodeId 读
+            if (spec != null && nameMatchesUnitDoc(candidates, spec)) {
+                WikiFileContentVO byNode = readPersonalByNodeId(u);
+                if (byNode != null) {
+                    return byNode;
+                }
+            }
+            if (u.getSessionId() == null) {
+                continue;
+            }
+            WbChatSession session = chatSessionMapper.selectById(u.getSessionId());
+            if (session == null || session.getOutputDirNodeId() == null) {
+                continue;
+            }
+            for (String cand : candidates) {
+                SysWorkspaceNode file = workspaceFsService.findChildFile(
+                        session.getWorkspaceId(), session.getOutputDirNodeId(), cand);
+                if (file == null) {
+                    continue;
+                }
+                try {
+                    WorkspaceFileContentVO content = workspaceFsService.readFileForTenant(
+                            session.getWorkspaceId(), file.getId());
+                    WikiFileContentVO vo = new WikiFileContentVO();
+                    vo.setId(file.getId());
+                    vo.setDisplayName(content.getDisplayName());
+                    vo.setContent(content.getContent());
+                    return vo;
+                } catch (Exception ignored) {
+                    // try next
+                }
+            }
+            // 会话目录未命中文件名时，仍尝试单元正式产出节点（历史改名/别名）
+            if (spec != null && nameMatchesUnitDoc(candidates, spec)) {
+                WikiFileContentVO byNode = readPersonalByNodeId(u);
+                if (byNode != null) {
+                    return byNode;
+                }
+            }
+        }
+        return null;
+    }
+
+    private WikiFileContentVO readPersonalByNodeId(PipeUnitInstance u) {
+        if (u.getOutputWorkspaceNodeId() == null || u.getSessionId() == null) {
+            return null;
+        }
+        WbChatSession session = chatSessionMapper.selectById(u.getSessionId());
+        if (session == null) {
+            return null;
+        }
+        try {
+            WorkspaceFileContentVO content = workspaceFsService.readFileForTenant(
+                    session.getWorkspaceId(), u.getOutputWorkspaceNodeId());
+            WikiFileContentVO vo = new WikiFileContentVO();
+            vo.setId(u.getOutputWorkspaceNodeId());
+            vo.setDisplayName(content.getDisplayName());
+            vo.setContent(content.getContent());
+            return vo;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean nameMatchesUnitDoc(List<String> candidates, PipeUnitMaterialSpec spec) {
+        for (String c : candidates) {
+            if (c.equalsIgnoreCase(spec.formalOutputName())
+                    || c.equalsIgnoreCase(spec.confirmOutputName())) {
+                return true;
+            }
+            // 确认轮次草稿：正式确认名-rN.md
+            String base = spec.confirmOutputName() == null ? ""
+                    : spec.confirmOutputName().replaceFirst("(?i)\\.md$", "");
+            if (StringUtils.hasText(base) && c.matches("(?i)" + java.util.regex.Pattern.quote(base) + "-r\\d+\\.md")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 打开文档时的候选文件名（含历史短名别名、去轮次后缀） */
+    private static List<String> docNameCandidates(String name) {
+        LinkedHashSet<String> set = new LinkedHashSet<>();
+        set.add(name);
+        if (name.matches("(?i).+-r\\d+\\.md$")) {
+            set.add(name.replaceFirst("(?i)-r\\d+(\\.md)$", "$1"));
+        }
+        // 详设/用例评审：完整名 ↔ 历史短名
+        Map<String, String> aliases = Map.ofEntries(
+                Map.entry("详细设计评审-架构-确认.md", "详设评审-架构-确认.md"),
+                Map.entry("详细设计评审-产品-确认.md", "详设评审-产品-确认.md"),
+                Map.entry("详细设计评审-测试-确认.md", "详设评审-测试-确认.md"),
+                Map.entry("测试用例评审-架构-确认.md", "用例评审-架构-确认.md"),
+                Map.entry("测试用例评审-产品-确认.md", "用例评审-产品-确认.md"),
+                Map.entry("测试用例评审-研发-确认.md", "用例评审-研发-确认.md")
+        );
+        for (Map.Entry<String, String> e : aliases.entrySet()) {
+            if (name.equalsIgnoreCase(e.getKey())) {
+                set.add(e.getValue());
+            } else if (name.equalsIgnoreCase(e.getValue())) {
+                set.add(e.getKey());
+            }
+        }
+        return new ArrayList<>(set);
+    }
+
+    private WikiFileContentVO toWikiContent(SysWikiNode node) {
+        return wikiFsService.readFile(node.getId());
+    }
+
+    /**
+     * 二审选版本：产品 Wiki 下创建「{计划版本}」，把「{需求编号}」文件夹迁入其下，
+     * 并合并「原始需求/{需求编号}」内容；随后刷新本流水线已建会话的 displayPath 引用。
+     */
+    private void promoteWikiToReleaseVersion(
+            PipeInstance inst, ReqRequirement requirement, String planVersion) {
+        SysProduct product = productService.requireOwned(requirement.getProductId());
+        if (product.getWikiNodeId() == null) {
+            Long productDirId = wikiFsService.ensureProductDir(product);
+            product.setWikiNodeId(productDirId);
+            productService.updateWikiNodeId(product.getId(), productDirId);
+        }
+        Long reqDirId = wikiFsService.promoteRequirementFolderToVersion(product, requirement, planVersion);
+        refreshPipeSessionWikiPaths(inst.getId(), reqDirId);
+    }
+
+    /** 刷新本实例相关会话的输入/上下文 displayPath（节点 ID 不变，路径随目录搬家更新） */
+    private void refreshPipeSessionWikiPaths(Long instanceId, Long reqDirId) {
+        List<PipeUnitInstance> units = unitInstanceMapper.selectList(new LambdaQueryWrapper<PipeUnitInstance>()
+                .eq(PipeUnitInstance::getInstanceId, instanceId));
+        List<Long> sessionIds = units.stream()
+                .map(PipeUnitInstance::getSessionId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (sessionIds.isEmpty()) {
+            return;
+        }
+        for (Long sessionId : sessionIds) {
+            List<WbSessionInput> inputs = sessionInputMapper.selectList(new LambdaQueryWrapper<WbSessionInput>()
+                    .eq(WbSessionInput::getSessionId, sessionId));
+            for (WbSessionInput in : inputs) {
+                if (in.getWikiNodeId() == null) {
+                    continue;
+                }
+                try {
+                    SysWikiNode node = wikiFsService.requireNode(in.getWikiNodeId());
+                    String path = wikiFsService.buildDisplayPath(node);
+                    if (!Objects.equals(path, in.getDisplayPath())) {
+                        in.setDisplayPath(path);
+                        sessionInputMapper.updateById(in);
+                    }
+                } catch (Exception ignored) {
+                    // 节点已删则跳过
+                }
+            }
+            List<WbSessionContext> contexts = sessionContextMapper.selectList(
+                    new LambdaQueryWrapper<WbSessionContext>()
+                            .eq(WbSessionContext::getSessionId, sessionId));
+            for (WbSessionContext ctx : contexts) {
+                if (ctx.getWikiNodeId() == null) {
+                    continue;
+                }
+                try {
+                    SysWikiNode node = wikiFsService.requireNode(ctx.getWikiNodeId());
+                    String path = wikiFsService.buildDisplayPath(node);
+                    if (!Objects.equals(path, ctx.getDisplayPath())) {
+                        ctx.setDisplayPath(path);
+                        sessionContextMapper.updateById(ctx);
+                    }
+                } catch (Exception ignored) {
+                    // skip
+                }
+            }
+        }
+    }
+
+    /** 产品配置的主仓本地路径（设计/详设用，不创建 worktree）。 */
+    public List<String> listProductRepoPaths(Long productId, String repoKind) {
+        List<String> paths = new ArrayList<>();
+        for (SysProductCodeRepo repo : productService.listCodeRepos(productId)) {
+            if (!StringUtils.hasText(repo.getLocalPath())) {
+                continue;
+            }
+            String kind = StringUtils.hasText(repo.getRepoKind()) ? repo.getRepoKind() : "BIZ";
+            if (!StringUtils.hasText(repoKind) || "NONE".equalsIgnoreCase(repoKind)
+                    || repoKind.equalsIgnoreCase(kind)
+                    || "BOTH".equalsIgnoreCase(repoKind)) {
+                paths.add(repo.getLocalPath().trim());
+            }
+        }
+        return paths;
+    }
+
+    private List<PipeRepoWorktree> ensureWorktrees(PipeInstance inst, ReqRequirement requirement) {
+        return ensureWorktreesInternal(
+                inst,
+                requirement.getProductId(),
+                requirement.getReqNo(),
+                requirement.getId(),
+                null,
+                GitWorktreeService.BranchPrefix.FEAT);
+    }
+
+    private List<PipeRepoWorktree> ensureWorktreesForIssue(PipeInstance inst, IssIssue issue) {
+        return ensureWorktreesInternal(
+                inst,
+                issue.getProductId(),
+                issue.getIssueNo(),
+                null,
+                issue.getId(),
+                GitWorktreeService.BranchPrefix.FIX);
+    }
+
+    private List<PipeRepoWorktree> ensureWorktreesInternal(
+            PipeInstance inst,
+            Long productId,
+            String refNo,
+            Long requirementId,
+            Long issueId,
+            GitWorktreeService.BranchPrefix prefix) {
+        List<SysProductCodeRepo> repos = productService.listCodeRepos(productId);
+        if (repos.isEmpty()) {
+            return List.of();
+        }
+        LocalDateTime now = LocalDateTime.now();
+        List<PipeRepoWorktree> result = new ArrayList<>();
+        for (SysProductCodeRepo repo : repos) {
+            PipeRepoWorktree existing = worktreeMapper.selectOne(new LambdaQueryWrapper<PipeRepoWorktree>()
+                    .eq(PipeRepoWorktree::getInstanceId, inst.getId())
+                    .eq(PipeRepoWorktree::getProductCodeRepoId, repo.getId()));
+            if (existing != null) {
+                result.add(existing);
+                continue;
+            }
+            String kind = StringUtils.hasText(repo.getRepoKind()) ? repo.getRepoKind() : "BIZ";
+            GitWorktreeService.WorktreeResult wt =
+                    gitWorktreeService.ensureWorktree(repo.getLocalPath(), refNo, kind, prefix);
+            PipeRepoWorktree row = new PipeRepoWorktree();
+            row.setInstanceId(inst.getId());
+            row.setRequirementId(requirementId);
+            row.setIssueId(issueId);
+            row.setProductCodeRepoId(repo.getId());
+            row.setRepoKind(kind);
+            row.setBranchName(wt.branchName());
+            row.setWorktreePath(wt.worktreePath());
+            row.setBaseLocalPath(repo.getLocalPath());
+            row.setStatus("READY");
+            row.setCreatedAt(now);
+            row.setUpdatedAt(now);
+            worktreeMapper.insert(row);
+            result.add(row);
+        }
+        return result;
+    }
+
+    private void markOptionalEnabled(Long instanceId, String nodeCode, boolean enabled) {
+        PipeNodeInstance n = nodeInstanceMapper.selectOne(new LambdaQueryWrapper<PipeNodeInstance>()
+                .eq(PipeNodeInstance::getInstanceId, instanceId)
+                .eq(PipeNodeInstance::getNodeCode, nodeCode));
+        if (n == null) {
+            return;
+        }
+        n.setEnabledFlag(enabled);
+        if (!enabled) {
+            n.setStatus("SKIPPED");
+        }
+        nodeInstanceMapper.updateById(n);
+    }
+
+    private PipelineInstanceVO toVo(PipeInstance inst, ReqRequirement requirement, IssIssue issue) {
+        PipeDefinition def = definitionMapper.selectById(inst.getDefinitionId());
+        PipelineInstanceVO vo = new PipelineInstanceVO();
+        vo.setId(inst.getId());
+        if (issue != null) {
+            vo.setIssueId(issue.getId());
+            vo.setIssueNo(issue.getIssueNo());
+            vo.setProductId(issue.getProductId());
+            vo.setRequirementId(issue.getRequirementId());
+            if (issue.getRequirementId() != null) {
+                ReqRequirement linked = requirementMapper.selectById(issue.getRequirementId());
+                if (linked != null) {
+                    vo.setReqNo(linked.getReqNo());
+                    vo.setRequirementName(linked.getName());
+                }
+            }
+        } else if (requirement != null) {
+            vo.setRequirementId(requirement.getId());
+            vo.setProductId(requirement.getProductId());
+            vo.setReqNo(requirement.getReqNo());
+            vo.setRequirementName(requirement.getName());
+        }
+        vo.setDefinitionId(inst.getDefinitionId());
+        if (def != null) {
+            vo.setDefinitionCode(def.getCode());
+            vo.setDefinitionName(def.getName());
+        }
+        vo.setStatus(inst.getStatus());
+        vo.setWaitingReason(inst.getWaitingReason());
+        vo.setOptionsJson(inst.getOptionsJson());
+        vo.setStartedAt(inst.getStartedAt());
+        vo.setFinishedAt(inst.getFinishedAt());
+
+        List<PipeNodeInstance> nodes = nodeInstanceMapper.selectList(new LambdaQueryWrapper<PipeNodeInstance>()
+                .eq(PipeNodeInstance::getInstanceId, inst.getId())
+                .orderByAsc(PipeNodeInstance::getSortOrder)
+                .orderByAsc(PipeNodeInstance::getId));
+        List<PipeUnitInstance> units = unitInstanceMapper.selectList(new LambdaQueryWrapper<PipeUnitInstance>()
+                .eq(PipeUnitInstance::getInstanceId, inst.getId()));
+        Map<Long, List<PipeUnitInstance>> byNode = units.stream()
+                .collect(Collectors.groupingBy(PipeUnitInstance::getNodeInstanceId));
+
+        // 批量拉取各单元会话上下文路径，避免 N+1
+        List<Long> sessionIds = units.stream()
+                .map(PipeUnitInstance::getSessionId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, List<String>> contextPathsBySession = new java.util.HashMap<>();
+        if (!sessionIds.isEmpty()) {
+            List<WbSessionContext> allCtx = sessionContextMapper.selectList(
+                    new LambdaQueryWrapper<WbSessionContext>()
+                            .in(WbSessionContext::getSessionId, sessionIds)
+                            .orderByAsc(WbSessionContext::getId));
+            for (WbSessionContext c : allCtx) {
+                String path = c.getDisplayPath();
+                if (!StringUtils.hasText(path) && c.getWikiNodeId() != null) {
+                    try {
+                        SysWikiNode node = wikiFsService.requireNode(c.getWikiNodeId());
+                        path = wikiFsService.buildDisplayPath(node);
+                        if (StringUtils.hasText(path) && !Objects.equals(path, c.getDisplayPath())) {
+                            c.setDisplayPath(path);
+                            sessionContextMapper.updateById(c);
+                        }
+                    } catch (Exception ignored) {
+                        path = null;
+                    }
+                }
+                if (!StringUtils.hasText(path)) {
+                    continue;
+                }
+                contextPathsBySession
+                        .computeIfAbsent(c.getSessionId(), k -> new ArrayList<>())
+                        .add(path);
+            }
+        }
+
+        for (PipeNodeInstance n : nodes) {
+            PipelineInstanceVO.NodeVO nv = new PipelineInstanceVO.NodeVO();
+            nv.setId(n.getId());
+            nv.setNodeCode(n.getNodeCode());
+            nv.setNodeName(n.getNodeName());
+            nv.setKind(n.getKind());
+            nv.setStatus(n.getStatus());
+            nv.setOptionalFlag(n.getOptionalFlag());
+            nv.setEnabledFlag(n.getEnabledFlag());
+            nv.setSortOrder(n.getSortOrder());
+            List<PipeUnitInstance> ul = byNode.getOrDefault(n.getId(), List.of()).stream()
+                    .sorted(Comparator.comparing(PipeUnitInstance::getId))
+                    .toList();
+            for (PipeUnitInstance u : ul) {
+                PipelineInstanceVO.UnitVO uv = new PipelineInstanceVO.UnitVO();
+                uv.setId(u.getId());
+                uv.setUnitCode(u.getUnitCode());
+                uv.setUnitName(u.getUnitName());
+                uv.setPositionCode(u.getPositionCode());
+                uv.setTaskTypeCode(u.getTaskTypeCode());
+                uv.setStatus(u.getStatus());
+                uv.setRoundTier(u.getRoundTier());
+                uv.setMaxRound(u.getMaxRound());
+                uv.setConfirmRound(u.getConfirmRound());
+                uv.setRepoKind(u.getRepoKind());
+                uv.setSessionId(u.getSessionId());
+                uv.setOutputWorkspaceNodeId(u.getOutputWorkspaceNodeId());
+                uv.setOutputWikiNodeId(u.getOutputWikiNodeId());
+                uv.setErrorMessage(u.getErrorMessage());
+                if (u.getSessionId() != null) {
+                    List<String> paths = contextPathsBySession.getOrDefault(u.getSessionId(), List.of());
+                    if (paths.isEmpty()) {
+                        paths = resolveAndBackfillContextPaths(u, inst, requirement);
+                        if (!paths.isEmpty()) {
+                            contextPathsBySession.put(u.getSessionId(), paths);
+                        }
+                    }
+                    uv.setContextPaths(paths);
+                }
+                nv.getUnits().add(uv);
+            }
+            vo.getNodes().add(nv);
+        }
+
+        vo.setTrackMerges(pipeMergeService.listForInstance(inst.getId()));
+
+        List<PipeRepoWorktree> wts = worktreeMapper.selectList(new LambdaQueryWrapper<PipeRepoWorktree>()
+                .eq(PipeRepoWorktree::getInstanceId, inst.getId())
+                .orderByAsc(PipeRepoWorktree::getId));
+        for (PipeRepoWorktree w : wts) {
+            PipelineInstanceVO.WorktreeVO wv = new PipelineInstanceVO.WorktreeVO();
+            wv.setId(w.getId());
+            wv.setProductCodeRepoId(w.getProductCodeRepoId());
+            wv.setRepoKind(w.getRepoKind());
+            wv.setBranchName(w.getBranchName());
+            wv.setWorktreePath(w.getWorktreePath());
+            wv.setBaseLocalPath(w.getBaseLocalPath());
+            wv.setStatus(w.getStatus());
+            vo.getWorktrees().add(wv);
+        }
+        return vo;
+    }
+
+    private PipeDefinition resolveDefinition(Long tenantId, String code) {
+        String defCode = StringUtils.hasText(code) ? code.trim() : "RD_AUTO";
+        // 租户覆盖优先，否则平台种子
+        PipeDefinition tenantDef = definitionMapper.selectOne(new LambdaQueryWrapper<PipeDefinition>()
+                .eq(PipeDefinition::getTenantId, tenantId)
+                .eq(PipeDefinition::getCode, defCode)
                 .eq(PipeDefinition::getEnabled, true)
-                .isNull(PipeDefinition::getTenantId)
                 .orderByDesc(PipeDefinition::getVersion)
                 .last("LIMIT 1"));
-        if (def == null) {
-            throw new BizException("未找到流水线定义 RD_AUTO");
+        if (tenantDef != null) {
+            return tenantDef;
         }
-        return def;
-    }
-
-    private List<PipeStepDef> listStepDefs(Long definitionId) {
-        return stepDefMapper.selectList(new LambdaQueryWrapper<PipeStepDef>()
-                .eq(PipeStepDef::getDefinitionId, definitionId)
-                .orderByAsc(PipeStepDef::getSortOrder));
-    }
-
-    private ReqRequirement requireRequirementInTenant(Long requirementId) {
-        Long tenantId = TenantSupport.requireTenantId();
-        ReqRequirement entity = requirementMapper.selectById(requirementId);
-        if (entity == null || !Objects.equals(entity.getTenantId(), tenantId)) {
-            throw new BizException(404, "需求不存在");
+        PipeDefinition platform = definitionMapper.selectOne(new LambdaQueryWrapper<PipeDefinition>()
+                .isNull(PipeDefinition::getTenantId)
+                .eq(PipeDefinition::getCode, defCode)
+                .eq(PipeDefinition::getEnabled, true)
+                .orderByDesc(PipeDefinition::getVersion)
+                .last("LIMIT 1"));
+        if (platform == null) {
+            throw new BizException("未找到启用的流水线定义：" + defCode);
         }
-        return entity;
+        return platform;
     }
 
-    private PipeInstance requireRunningInstance(Long requirementId) {
-        requireRequirementInTenant(requirementId);
-        PipeInstance inst = instanceMapper.selectOne(new LambdaQueryWrapper<PipeInstance>()
-                .eq(PipeInstance::getRequirementId, requirementId)
-                .in(PipeInstance::getStatus, List.of("RUNNING", "WAITING_HUMAN")));
-        if (inst == null) {
-            throw new BizException("没有进行中的流水线");
+    private ReqRequirement requireRequirement(Long id, Long tenantId) {
+        ReqRequirement r = requirementMapper.selectById(id);
+        if (r == null || !Objects.equals(r.getTenantId(), tenantId)) {
+            throw new BizException("需求不存在");
+        }
+        return r;
+    }
+
+    private PipeInstance requireInstance(Long id, Long tenantId) {
+        PipeInstance inst = instanceMapper.selectById(id);
+        if (inst == null || !Objects.equals(inst.getTenantId(), tenantId)) {
+            throw new BizException("流水线实例不存在");
         }
         return inst;
     }
 
-    private PipeStepInstance requireStep(Long instanceId, Long stepInstanceId) {
-        PipeStepInstance step = stepInstanceMapper.selectById(stepInstanceId);
-        if (step == null || !Objects.equals(step.getInstanceId(), instanceId)) {
-            throw new BizException(404, "步骤不存在");
+    /**
+     * 会话已创建但 wb_session_context 为空/无路径时：按材料目录补绑并返回展示路径。
+     * 若会话里已有行但 display_path 空，则按 wikiNodeId 重建。
+     */
+    private List<String> resolveAndBackfillContextPaths(
+            PipeUnitInstance unit, PipeInstance inst, ReqRequirement requirement) {
+        List<String> paths = new ArrayList<>();
+        Long sessionId = unit.getSessionId();
+        if (sessionId == null) {
+            return paths;
         }
-        return step;
-    }
-
-    private PipeInstance findActiveOrLatest(Long requirementId) {
-        PipeInstance active = instanceMapper.selectOne(new LambdaQueryWrapper<PipeInstance>()
-                .eq(PipeInstance::getRequirementId, requirementId)
-                .in(PipeInstance::getStatus, List.of("RUNNING", "WAITING_HUMAN"))
-                .last("LIMIT 1"));
-        if (active != null) {
-            return active;
-        }
-        return instanceMapper.selectOne(new LambdaQueryWrapper<PipeInstance>()
-                .eq(PipeInstance::getRequirementId, requirementId)
-                .orderByDesc(PipeInstance::getId)
-                .last("LIMIT 1"));
-    }
-
-    private PipelineInstanceVO toVo(PipeInstance inst) {
-        PipeDefinition def = definitionMapper.selectById(inst.getDefinitionId());
-        PipelineInstanceVO vo = new PipelineInstanceVO();
-        vo.setInstanceId(inst.getId());
-        vo.setRequirementId(inst.getRequirementId());
-        vo.setDefinitionCode(def != null ? def.getCode() : null);
-        vo.setDefinitionVersion(def != null ? def.getVersion() : null);
-        vo.setStatus(inst.getStatus());
-        vo.setWaitingReason(inst.getWaitingReason());
-        vo.setCurrentStepCodes(readStringList(inst.getCurrentStepCodes()));
-        vo.setTotalDurationMs(nvl(inst.getTotalDurationMs()));
-        vo.setTotalPromptTokens(nvl(inst.getTotalPromptTokens()));
-        vo.setTotalCompletionTokens(nvl(inst.getTotalCompletionTokens()));
-        vo.setTotalTokens(nvl(inst.getTotalTokens()));
-        vo.setStartedAt(inst.getStartedAt());
-        vo.setFinishedAt(inst.getFinishedAt());
-
-        List<PipeStepInstance> steps = stepInstanceMapper.selectList(new LambdaQueryWrapper<PipeStepInstance>()
-                .eq(PipeStepInstance::getInstanceId, inst.getId())
-                .orderByAsc(PipeStepInstance::getId));
-        List<PipelineStepVO> stepVos = new ArrayList<>();
-        for (PipeStepInstance s : steps) {
-            stepVos.add(toStepVo(s));
-        }
-        vo.setSteps(stepVos);
-        return vo;
-    }
-
-    private PipelineStepVO toStepVo(PipeStepInstance s) {
-        PipelineStepVO vo = new PipelineStepVO();
-        vo.setStepInstanceId(s.getId());
-        vo.setStepCode(s.getStepCode());
-        vo.setStepName(s.getStepName());
-        vo.setStatus(s.getStatus());
-        vo.setRound(s.getRound());
-        vo.setExecutor(s.getExecutor());
-        vo.setHandlerUserId(s.getHandlerUserId());
-        vo.setSessionId(s.getSessionId());
-        vo.setOutputArtifactId(s.getOutputArtifactId());
-        vo.setReviewId(s.getReviewId());
-        vo.setErrorMessage(s.getErrorMessage());
-        vo.setStartedAt(s.getStartedAt());
-        vo.setFinishedAt(s.getFinishedAt());
-        vo.setDurationMs(nvl(s.getDurationMs()));
-        vo.setPromptTokens(nvl(s.getPromptTokens()));
-        vo.setCompletionTokens(nvl(s.getCompletionTokens()));
-        vo.setTotalTokens(nvl(s.getTotalTokens()));
-        List<PipeStepAssignee> assignees = assigneeMapper.selectList(new LambdaQueryWrapper<PipeStepAssignee>()
-                .eq(PipeStepAssignee::getStepInstanceId, s.getId()));
-        vo.setAssignees(assignees.stream().map(a -> {
-            PipelineAssigneeVO av = new PipelineAssigneeVO();
-            av.setUserId(a.getUserId());
-            av.setStatus(a.getStatus());
-            av.setActedAt(a.getActedAt());
-            SysUser u = userMapper.selectById(a.getUserId());
-            av.setUsername(u != null ? u.getUsername() : null);
-            return av;
-        }).collect(Collectors.toList()));
-        enrichStepPaths(s, vo);
-        enrichReviewItems(s, vo);
-        return vo;
-    }
-
-    private void enrichStepPaths(PipeStepInstance s, PipelineStepVO vo) {
-        try {
-            PipeInstance inst = instanceMapper.selectById(s.getInstanceId());
-            if (inst == null) {
-                return;
-            }
-            ReqRequirement req = requirementMapper.selectById(inst.getRequirementId());
-            if (req == null) {
-                return;
-            }
-            SysProduct product = productService.requireOwned(req.getProductId());
-            if (product.getWikiNodeId() != null) {
-                SysWikiNode ctx = wikiFsService.requireNode(product.getWikiNodeId());
-                String ctxPath = wikiFsService.buildDisplayPath(ctx);
-                vo.setContextPaths(List.of(ctxPath));
-                vo.setOutputDirPath(ctxPath + "/" + req.getReqNo());
-            }
-            for (SysProductCodeRepo repo : productService.listCodeRepos(product.getId())) {
-                vo.getCodeRepoPaths().add(repo.getLocalPath());
-            }
-            PipeStepDef def = stepDefMapper.selectOne(new LambdaQueryWrapper<PipeStepDef>()
-                    .eq(PipeStepDef::getDefinitionId, inst.getDefinitionId())
-                    .eq(PipeStepDef::getCode, s.getStepCode()));
-            if (def != null) {
-                for (String kind : aiRunnerProvider.getObject().resolveInputKinds(def)) {
-                    PipeArtifact art = artifactService.findCurrent(req.getId(), kind);
-                    if (art != null && art.getWikiNodeId() != null) {
-                        SysWikiNode n = wikiFsService.requireNode(art.getWikiNodeId());
-                        vo.getInputPaths().add(kind + ": " + wikiFsService.buildDisplayPath(n));
-                    } else {
-                        vo.getInputPaths().add(kind + ": （尚未产出）");
-                    }
-                }
-                if (StringUtils.hasText(def.getTemplateWikiPath())) {
-                    vo.setOutputTemplatePath(def.getTemplateWikiPath());
-                }
-            }
-            enrichFromSession(s, vo);
-        } catch (Exception e) {
-            log.debug("enrich step paths skipped: {}", e.getMessage());
-        }
-    }
-
-    private void enrichFromSession(PipeStepInstance s, PipelineStepVO vo) {
-        if (s.getSessionId() == null) {
-            return;
-        }
-        WbChatSession sess = chatSessionMapper.selectById(s.getSessionId());
-        if (sess == null) {
-            return;
-        }
-        if (sess.getOutputWikiDirNodeId() != null) {
-            try {
-                SysWikiNode dir = wikiFsService.requireNode(sess.getOutputWikiDirNodeId());
-                vo.setOutputDirPath(wikiFsService.buildDisplayPath(dir));
-            } catch (Exception ignored) {
-                // keep previous
-            }
-        }
-        if (sess.getOutputTemplateWikiNodeId() != null) {
-            try {
-                SysWikiNode tpl = wikiFsService.requireNode(sess.getOutputTemplateWikiNodeId());
-                vo.setOutputTemplatePath(wikiFsService.buildDisplayPath(tpl));
-            } catch (Exception ignored) {
-                // keep previous
-            }
-        }
-    }
-
-    private void enrichReviewItems(PipeStepInstance s, PipelineStepVO vo) {
-        List<PipeStepInstance> reviewSteps = new ArrayList<>();
-        if (s.getReviewId() != null) {
-            reviewSteps.add(s);
-        } else if ("HUMAN_APPROVE".equals(s.getExecutor())) {
-            // 确认步：自本步向前回溯，合并紧邻的连续 AI_REVIEW（多角色共用模板 → 合并有效项）
-            List<PipeStepInstance> ordered = stepInstanceMapper.selectList(new LambdaQueryWrapper<PipeStepInstance>()
-                    .eq(PipeStepInstance::getInstanceId, s.getInstanceId())
-                    .orderByAsc(PipeStepInstance::getId));
-            for (int i = ordered.size() - 1; i >= 0; i--) {
-                if (Objects.equals(ordered.get(i).getId(), s.getId())) {
-                    for (int j = i - 1; j >= 0; j--) {
-                        PipeStepInstance prev = ordered.get(j);
-                        if ("AI_REVIEW".equals(prev.getExecutor())) {
-                            if ("SUCCEEDED".equals(prev.getStatus()) && prev.getReviewId() != null) {
-                                reviewSteps.add(0, prev);
-                            }
-                            continue;
+        List<WbSessionContext> existing = sessionContextMapper.selectList(
+                new LambdaQueryWrapper<WbSessionContext>()
+                        .eq(WbSessionContext::getSessionId, sessionId)
+                        .orderByAsc(WbSessionContext::getId));
+        if (!existing.isEmpty()) {
+            for (WbSessionContext c : existing) {
+                String path = c.getDisplayPath();
+                if (!StringUtils.hasText(path) && c.getWikiNodeId() != null) {
+                    try {
+                        SysWikiNode node = wikiFsService.requireNode(c.getWikiNodeId());
+                        path = wikiFsService.buildDisplayPath(node);
+                        if (StringUtils.hasText(path)) {
+                            c.setDisplayPath(path);
+                            sessionContextMapper.updateById(c);
+                        } else if (StringUtils.hasText(node.getDisplayName())) {
+                            path = node.getDisplayName();
                         }
-                        break;
+                    } catch (Exception ignored) {
+                        path = null;
                     }
-                    break;
+                }
+                if (StringUtils.hasText(path)) {
+                    paths.add(path);
                 }
             }
+            return paths;
         }
-        if (reviewSteps.isEmpty()) {
-            return;
-        }
-        Long primaryReviewId = null;
-        for (PipeStepInstance rs : reviewSteps) {
-            Long rid = rs.getReviewId();
-            if (rid == null) {
-                continue;
+        // 无上下文行：按目录配置补绑
+        try {
+            WbChatSession session = chatSessionMapper.selectById(sessionId);
+            if (session == null || session.getWorkspaceId() == null) {
+                return paths;
             }
-            if (primaryReviewId == null) {
-                primaryReviewId = rid;
-                vo.setReviewId(rid);
+            WorkspaceSessionCreateRequest req = new WorkspaceSessionCreateRequest();
+            materialBinder.bindToCreateRequest(req, session.getWorkspaceId(), inst, unit, requirement);
+            if (req.getContexts() == null || req.getContexts().isEmpty()) {
+                return paths;
             }
-            PipeReview review = reviewMapper.selectById(rid);
-            PipelineReviewDocVO doc = new PipelineReviewDocVO();
-            doc.setReviewId(rid);
-            doc.setStepInstanceId(rs.getId());
-            doc.setStepName(rs.getStepName());
-            doc.setRoleHint(rs.getStepCode());
-            if (review != null && review.getSummaryWikiNodeId() != null) {
-                doc.setWikiNodeId(review.getSummaryWikiNodeId());
-                try {
-                    SysWikiNode n = wikiFsService.requireNode(review.getSummaryWikiNodeId());
-                    doc.setWikiPath(wikiFsService.buildDisplayPath(n));
-                } catch (Exception ignored) {
-                    // ignore
-                }
-                if (vo.getReviewWikiNodeId() == null) {
-                    vo.setReviewWikiNodeId(review.getSummaryWikiNodeId());
-                    vo.setReviewWikiPath(doc.getWikiPath());
-                }
-            }
-            vo.getReviewDocs().add(doc);
-
-            List<PipeReviewItem> items = reviewItemMapper.selectList(new LambdaQueryWrapper<PipeReviewItem>()
-                    .eq(PipeReviewItem::getReviewId, rid)
-                    .orderByAsc(PipeReviewItem::getOrdinal));
-            for (PipeReviewItem it : items) {
-                PipelineReviewItemVO iv = new PipelineReviewItemVO();
-                iv.setId(it.getId());
-                iv.setOrdinal(it.getOrdinal());
-                iv.setContent(it.getContent());
-                iv.setChecked(it.getChecked());
-                iv.setSource(it.getSource());
-                vo.getReviewItems().add(iv);
-            }
-        }
-    }
-
-    @Transactional
-    public void updateReviewItems(Long requirementId, Long stepInstanceId, List<PipelineReviewItemVO> items) {
-        PipeInstance inst = requireRunningInstance(requirementId);
-        PipeStepInstance step = requireStep(inst.getId(), stepInstanceId);
-        if (!"WAITING_HUMAN".equals(step.getStatus()) || !"HUMAN_APPROVE".equals(step.getExecutor())) {
-            throw new BizException("仅确认人闸可改评审项");
-        }
-        PipelineStepVO tmp = new PipelineStepVO();
-        enrichReviewItems(step, tmp);
-        if (tmp.getReviewItems().isEmpty() && tmp.getReviewId() == null) {
-            throw new BizException("无评审项");
-        }
-        java.util.Set<Long> allowedReviewIds = tmp.getReviewDocs().stream()
-                .map(PipelineReviewDocVO::getReviewId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        if (allowedReviewIds.isEmpty() && tmp.getReviewId() != null) {
-            allowedReviewIds.add(tmp.getReviewId());
-        }
-        if (items == null) {
-            return;
-        }
-        Long userId = TenantSupport.requireUserId();
-        java.util.Set<Long> keepIds = items.stream()
-                .map(PipelineReviewItemVO::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        for (PipelineReviewItemVO existing : tmp.getReviewItems()) {
-            if (existing.getId() != null && !keepIds.contains(existing.getId())) {
-                reviewItemMapper.deleteById(existing.getId());
-            }
-        }
-        int nextOrdinal = tmp.getReviewItems().size();
-        for (PipelineReviewItemVO iv : items) {
-            if (iv.getId() == null) {
-                // 新增：挂到主 review
-                Long reviewId = tmp.getReviewId();
-                if (reviewId == null) {
+            LocalDateTime now = LocalDateTime.now();
+            for (WorkspaceSessionCreateRequest.SessionContextRef ref : req.getContexts()) {
+                if (ref == null || ref.getWikiNodeId() == null) {
                     continue;
                 }
-                if (!StringUtils.hasText(iv.getContent())) {
-                    continue;
+                SysWikiNode node = wikiFsService.requireNode(ref.getWikiNodeId());
+                String path = wikiFsService.buildDisplayPath(node);
+                WbSessionContext row = new WbSessionContext();
+                row.setSessionId(sessionId);
+                row.setWikiNodeId(node.getId());
+                row.setNodeType(node.getNodeType());
+                row.setDisplayPath(path);
+                row.setCreatedAt(now);
+                sessionContextMapper.insert(row);
+                if (StringUtils.hasText(path)) {
+                    paths.add(path);
                 }
-                PipeReviewItem row = new PipeReviewItem();
-                row.setReviewId(reviewId);
-                row.setOrdinal(nextOrdinal++);
-                row.setContent(iv.getContent().trim());
-                row.setChecked(Boolean.TRUE.equals(iv.getChecked()));
-                row.setSource("HUMAN");
-                row.setAmendUserId(userId);
-                row.setCreatedAt(LocalDateTime.now());
-                reviewItemMapper.insert(row);
-                continue;
             }
-            PipeReviewItem row = reviewItemMapper.selectById(iv.getId());
-            if (row == null || !allowedReviewIds.contains(row.getReviewId())) {
-                continue;
-            }
-            if (StringUtils.hasText(iv.getContent())) {
-                row.setContent(iv.getContent().trim());
-            }
-            row.setChecked(Boolean.TRUE.equals(iv.getChecked()));
-            row.setAmendUserId(userId);
-            reviewItemMapper.updateById(row);
+        } catch (Exception ignored) {
+            // 展示兜底失败不影响主流程
         }
-    }
-
-    private String writeJson(Object o) {
-        try {
-            return objectMapper.writeValueAsString(o);
-        } catch (Exception e) {
-            return "[]";
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<String> readStringList(String json) {
-        if (!StringUtils.hasText(json)) {
-            return List.of();
-        }
-        try {
-            return objectMapper.readValue(json, List.class);
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
-
-    private static long nvl(Long v) {
-        return v == null ? 0L : v;
+        return paths;
     }
 }

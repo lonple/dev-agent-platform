@@ -15,6 +15,8 @@ import com.lonple.dap.server.modules.product.entity.SysProductVersion;
 import com.lonple.dap.server.modules.product.mapper.ProductCodeRepoMapper;
 import com.lonple.dap.server.modules.product.mapper.ProductMapper;
 import com.lonple.dap.server.modules.product.mapper.ProductVersionMapper;
+import com.lonple.dap.server.modules.issue.entity.IssIssue;
+import com.lonple.dap.server.modules.issue.mapper.IssueMapper;
 import com.lonple.dap.server.modules.requirement.entity.ReqRequirement;
 import com.lonple.dap.server.modules.requirement.mapper.RequirementMapper;
 import com.lonple.dap.server.modules.sysuser.entity.SysUser;
@@ -43,6 +45,7 @@ public class ProductService {
     private final ProductVersionMapper productVersionMapper;
     private final ProductCodeRepoMapper codeRepoMapper;
     private final RequirementMapper requirementMapper;
+    private final IssueMapper issueMapper;
     private final SysUserMapper userMapper;
     private final TenantUserMapper tenantUserMapper;
     private final WikiFsService wikiFsService;
@@ -124,6 +127,11 @@ public class ProductService {
         if (used != null && used > 0) {
             throw new BizException("产品已关联需求，无法删除");
         }
+        Long issueUsed = issueMapper.selectCount(new LambdaQueryWrapper<IssIssue>()
+                .eq(IssIssue::getProductId, id));
+        if (issueUsed != null && issueUsed > 0) {
+            throw new BizException("产品已关联问题单，无法删除");
+        }
         codeRepoMapper.delete(new LambdaQueryWrapper<SysProductCodeRepo>()
                 .eq(SysProductCodeRepo::getProductId, id));
         productVersionMapper.delete(new LambdaQueryWrapper<SysProductVersion>()
@@ -136,22 +144,6 @@ public class ProductService {
                 .eq(SysProductCodeRepo::getProductId, productId)
                 .orderByAsc(SysProductCodeRepo::getSortNo)
                 .orderByAsc(SysProductCodeRepo::getId));
-    }
-
-    /** 流水线启动校验：必须有 Wiki 根 + 至少一个仓 */
-    public void assertPipelineReady(SysProduct product) {
-        if (product.getWikiNodeId() == null) {
-            throw new BizException(400, "产品未绑定 Wiki 上下文路径，请先在产品配置中选择或新建");
-        }
-        SysWikiNode node = wikiFsService.requireNode(product.getWikiNodeId());
-        if (!WorkspaceNodeType.DIR.name().equals(node.getNodeType())) {
-            throw new BizException(400, "产品 Wiki 上下文必须是目录节点");
-        }
-        long repos = codeRepoMapper.selectCount(new LambdaQueryWrapper<SysProductCodeRepo>()
-                .eq(SysProductCodeRepo::getProductId, product.getId()));
-        if (repos <= 0) {
-            throw new BizException(400, "产品未配置代码仓库，请至少添加一个本地仓库路径");
-        }
     }
 
     @Transactional
@@ -236,6 +228,18 @@ public class ProductService {
     /** 校验版本属于产品，返回实体 */
     public SysProductVersion requireVersionOfProduct(Long productId, Long versionId) {
         return requireOwnedVersion(productId, versionId);
+    }
+
+    /** 仅在 wikiNodeId 为空时绑定产品 Wiki 根目录 */
+    @Transactional
+    public void updateWikiNodeId(Long productId, Long wikiNodeId) {
+        SysProduct product = requireOwned(productId);
+        if (product.getWikiNodeId() != null || wikiNodeId == null) {
+            return;
+        }
+        product.setWikiNodeId(wikiNodeId);
+        product.setUpdatedAt(LocalDateTime.now());
+        productMapper.updateById(product);
     }
 
     private void touchProduct(SysProduct product) {
@@ -328,6 +332,7 @@ public class ProductService {
             row.setProductId(productId);
             row.setLocalPath(spec.getLocalPath().trim());
             row.setLabel(StringUtils.hasText(spec.getLabel()) ? spec.getLabel().trim() : null);
+            row.setRepoKind("BIZ");
             row.setSortNo(i++);
             row.setCreatedAt(now);
             codeRepoMapper.insert(row);
@@ -364,6 +369,7 @@ public class ProductService {
             rv.setId(r.getId());
             rv.setLocalPath(r.getLocalPath());
             rv.setLabel(r.getLabel());
+            rv.setRepoKind(r.getRepoKind() != null ? r.getRepoKind() : "BIZ");
             rv.setSortNo(r.getSortNo());
             repos.add(rv);
         }

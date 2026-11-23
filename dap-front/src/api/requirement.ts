@@ -138,6 +138,10 @@ export function developRequirement(id: number) {
   return request.post<any, void>(`/requirements/${id}/develop`)
 }
 
+export function completeRequirement(id: number) {
+  return request.post<any, void>(`/requirements/${id}/complete`)
+}
+
 export function addRequirementHandlers(
   id: number,
   data: {

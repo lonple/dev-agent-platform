@@ -264,7 +264,13 @@ onMounted(load)
 
     <el-table :data="requirements" stripe>
       <el-table-column prop="reqNo" label="需求编号" width="180" />
-      <el-table-column prop="name" label="需求名称" min-width="150" />
+      <el-table-column prop="name" label="需求名称" min-width="150">
+        <template #default="{ row }">
+          <button type="button" class="name-link" @click="openView(row)">
+            {{ row.name }}
+          </button>
+        </template>
+      </el-table-column>
       <el-table-column prop="statusLabel" label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="STATUS_TAG[row.status as RequirementStatus] ?? 'info'" size="small">
@@ -287,18 +293,15 @@ onMounted(load)
         min-width="160"
         :show-overflow-tooltip="{ popperClass: 'req-desc-tooltip' }"
       />
-      <el-table-column label="操作" :width="canOperate ? 260 : 90" fixed="right">
+      <el-table-column v-if="canOperate" label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openView(row)">查看</el-button>
-          <template v-if="canOperate">
-            <el-button v-if="isEditable(row)" link type="primary" @click="openEdit(row)">
-              编辑
-            </el-button>
-            <el-button v-if="canSubmitApply(row)" link type="success" @click="openSubmit(row)">
-              提交申请
-            </el-button>
-            <el-button link type="danger" @click="remove(row)">删除</el-button>
-          </template>
+          <el-button v-if="isEditable(row)" link type="primary" @click="openEdit(row)">
+            编辑
+          </el-button>
+          <el-button v-if="canSubmitApply(row)" link type="success" @click="openSubmit(row)">
+            提交申请
+          </el-button>
+          <el-button link type="danger" @click="remove(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -484,6 +487,18 @@ onMounted(load)
 .page-hd h2 {
   margin: 0;
   font-size: 18px;
+}
+.name-link {
+  border: none;
+  padding: 0;
+  background: none;
+  color: var(--dap-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.name-link:hover {
+  text-decoration: underline;
 }
 .hint {
   margin: 6px 0 0;

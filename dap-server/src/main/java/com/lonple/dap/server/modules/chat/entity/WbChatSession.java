@@ -20,19 +20,19 @@ public class WbChatSession {
     private String sessionType;
     private String title;
     private Long requirementId;
+    /** 任务会话关联问题单（问题流水） */
+    private Long issueId;
     /** SessionTaskType.name，仅 TASK */
     private String taskTypeCode;
-    /** 个人空间输出目录（手动任务）；流水线任务请用 outputWikiDirNodeId */
+    /** 个人空间输出目录 */
     private Long outputDirNodeId;
-    /** 流水线任务输出目录：Wiki DIR 节点（可空） */
-    private Long outputWikiDirNodeId;
     /** 输出参考模板：Wiki「模板」目录下的文件节点（可空） */
     private Long outputTemplateWikiNodeId;
     /** 规范：Wiki「规范」下的 DIR 或 FILE 节点（可空） */
     private Long standardsWikiNodeId;
-    /** 关联流水线步骤（可空；用于回写 token） */
-    private Long pipeStepInstanceId;
     private Long positionId;
+    /** 流水线 Agent 单元实例 */
+    private Long pipeUnitInstanceId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

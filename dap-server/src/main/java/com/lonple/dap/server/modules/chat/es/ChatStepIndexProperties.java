@@ -13,5 +13,6 @@ public class ChatStepIndexProperties {
     private String stepIndexEnv = "dev";
 
     /** detail 文本最大字符（截断） */
-    private int stepDetailMaxChars = 20000;
+    /** llm call 的 prompt 快照会较大；默认 80k，可用配置覆盖 */
+    private int stepDetailMaxChars = 80000;
 }

@@ -102,6 +102,28 @@ public class PositionService {
                 .last("LIMIT 1"));
     }
 
+    /**
+     * 按编码确保内置岗位存在（如 UI 设计师）；已存在则原样返回，不改名。
+     */
+    @Transactional
+    public SysPosition ensureBuiltin(String code, String defaultName) {
+        SysPosition existing = findByCode(code);
+        if (existing != null) {
+            return existing;
+        }
+        Long tenantId = TenantSupport.requireTenantId();
+        String normalized = code == null ? "" : code.trim().toUpperCase();
+        SysPosition position = new SysPosition();
+        position.setTenantId(tenantId);
+        position.setCode(normalized);
+        position.setName(defaultName == null || defaultName.isBlank() ? normalized : defaultName.trim());
+        position.setDescription("系统初始化流水线提示词时自动创建");
+        position.setCreatedAt(LocalDateTime.now());
+        position.setUpdatedAt(LocalDateTime.now());
+        positionMapper.insert(position);
+        return position;
+    }
+
     @Transactional
     public void delete(Long id) {
         requireOwned(id);

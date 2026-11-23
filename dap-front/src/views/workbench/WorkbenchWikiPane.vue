@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Folder, MoreFilled, Plus, Refresh } from '@element-plus/icons-vue'
 import {
@@ -18,6 +18,11 @@ import { isHtmlPreview, isMdFile } from '../../utils/fileKind'
 
 const fileTree = ref<WikiNodeItem[]>([])
 const loadingTree = ref(false)
+const fileTreeVersion = ref(0)
+/** 默认展开一级目录，露出二级 */
+const fileTreeExpandedKeys = computed(() =>
+  fileTree.value.filter((n) => n.nodeType === 'DIR').map((n) => n.id),
+)
 const selectedDirId = ref<number | null>(null)
 const activeFile = ref<WikiFileContent | null>(null)
 const loadingFile = ref(false)
@@ -38,12 +43,34 @@ const reuploadNodeId = ref<number | null>(null)
 const reuploadDisplayName = ref('')
 const reuploadInputRef = ref<HTMLInputElement | null>(null)
 
+const wikiPaneRef = ref<HTMLElement | null>(null)
+const leftWidth = ref(300)
+const dragging = ref(false)
+
+function onSplitterDown(e: MouseEvent) {
+  dragging.value = true
+  e.preventDefault()
+  const paneLeft = wikiPaneRef.value?.getBoundingClientRect().left ?? 0
+  const onMove = (ev: MouseEvent) => {
+    leftWidth.value = Math.min(520, Math.max(200, ev.clientX - paneLeft))
+  }
+  const onUp = () => {
+    dragging.value = false
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+  }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+
 async function refreshFileTree() {
   loadingTree.value = true
   try {
     fileTree.value = await listWikiTree()
+    fileTreeVersion.value += 1
   } catch (e) {
     fileTree.value = []
+    fileTreeVersion.value += 1
     ElMessage.error(e instanceof Error ? e.message : '加载 Wiki 失败')
   } finally {
     loadingTree.value = false
@@ -267,8 +294,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="wiki-pane">
-    <aside class="col left">
+  <div ref="wikiPaneRef" class="wiki-pane">
+    <aside class="col left" :style="{ width: leftWidth + 'px' }">
       <div class="pane-hd">
         <span class="title">Work Wiki</span>
         <el-button class="icon-btn" text :icon="Plus" title="新建根目录" @click="openCreateRootDir" />
@@ -276,10 +303,11 @@ onMounted(() => {
       </div>
       <div class="left-body" v-loading="loadingTree">
         <el-tree
+          :key="`wiki-ft-${fileTreeVersion}`"
           class="file-tree"
           :data="fileTree"
           node-key="id"
-          default-expand-all
+          :default-expanded-keys="fileTreeExpandedKeys"
           highlight-current
           :current-node-key="selectedDirId ?? undefined"
           :props="{ label: 'displayName', children: 'children' }"
@@ -322,6 +350,13 @@ onMounted(() => {
         <div v-if="!fileTree.length && !loadingTree" class="empty">暂无 Wiki 文档，可点击 + 新建</div>
       </div>
     </aside>
+
+    <div
+      class="splitter"
+      :class="{ active: dragging }"
+      title="拖动调整宽度"
+      @mousedown="onSplitterDown"
+    />
 
     <section class="col main" v-loading="loadingFile">
       <template v-if="activeFile">
@@ -421,8 +456,19 @@ onMounted(() => {
   border-right: 1px solid var(--dap-gray-200);
 }
 .left {
-  width: 300px;
   flex-shrink: 0;
+  width: 300px;
+}
+.splitter {
+  width: 4px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  align-self: stretch;
+  background: transparent;
+}
+.splitter:hover,
+.splitter.active {
+  background: var(--dap-primary-light, #dbeafe);
 }
 .main {
   flex: 1;

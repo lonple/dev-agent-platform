@@ -290,6 +290,7 @@ public class WorkspaceFsService {
         ensureWorkspaceDir(ws);
         List<SysWorkspaceNode> nodes = nodeMapper.selectList(new LambdaQueryWrapper<SysWorkspaceNode>()
                 .eq(SysWorkspaceNode::getWorkspaceId, ws.getId())
+                .and(w -> w.isNull(SysWorkspaceNode::getHidden).or().eq(SysWorkspaceNode::getHidden, false))
                 .orderByAsc(SysWorkspaceNode::getNodeType)
                 .orderByAsc(SysWorkspaceNode::getDisplayName));
         return buildTree(nodes);
@@ -297,6 +298,23 @@ public class WorkspaceFsService {
 
     public WorkspaceFileContentVO readFile(Long workspaceId, Long nodeId) {
         SysWorkspace ws = requireOwnedPersonal(workspaceId);
+        return readFileInternal(ws, nodeId);
+    }
+
+    /**
+     * 流水线等跨模块读个人空间文件：校验租户即可（不要求当前用户是空间所有者）。
+     * 仍拒绝跨租户访问。
+     */
+    public WorkspaceFileContentVO readFileForTenant(Long workspaceId, Long nodeId) {
+        Long tenantId = TenantSupport.requireTenantId();
+        SysWorkspace ws = workspaceMapper.selectById(workspaceId);
+        if (ws == null || !Objects.equals(ws.getTenantId(), tenantId)) {
+            throw new BizException(404, "工作空间不存在");
+        }
+        return readFileInternal(ws, nodeId);
+    }
+
+    private WorkspaceFileContentVO readFileInternal(SysWorkspace ws, Long nodeId) {
         SysWorkspaceNode node = requireNode(ws.getId(), nodeId);
         if (!WorkspaceNodeType.FILE.name().equals(node.getNodeType())) {
             throw new BizException("只能打开文件");
@@ -315,12 +333,44 @@ public class WorkspaceFsService {
         }
     }
 
+    /** 查找子目录（不存在返回 null） */
+    public SysWorkspaceNode findChildDirectory(Long workspaceId, Long parentId, String displayName) {
+        if (!StringUtils.hasText(displayName)) {
+            return null;
+        }
+        LambdaQueryWrapper<SysWorkspaceNode> qw = new LambdaQueryWrapper<SysWorkspaceNode>()
+                .eq(SysWorkspaceNode::getWorkspaceId, workspaceId)
+                .eq(SysWorkspaceNode::getNodeType, WorkspaceNodeType.DIR.name())
+                .eq(SysWorkspaceNode::getDisplayName, displayName.trim())
+                .last("LIMIT 1");
+        if (parentId == null) {
+            qw.isNull(SysWorkspaceNode::getParentId);
+        } else {
+            qw.eq(SysWorkspaceNode::getParentId, parentId);
+        }
+        return nodeMapper.selectOne(qw);
+    }
+
+    /** 确保子目录存在 */
+    @Transactional
+    public Long ensureDirectory(Long workspaceId, Long parentId, String displayName) {
+        SysWorkspaceNode existing = findChildDirectory(workspaceId, parentId, displayName);
+        if (existing != null) {
+            return existing.getId();
+        }
+        return createDirectory(workspaceId, parentId, displayName);
+    }
+
     @Transactional
     public Long createDirectory(Long workspaceId, Long parentId, String displayName) {
         SysWorkspace ws = requireOwnedPersonal(workspaceId);
         ensureWorkspaceDir(ws);
         String name = normalizeDisplayName(displayName, false);
         Long parent = resolveParentDirId(ws.getId(), parentId);
+        SysWorkspaceNode existed = findChildDirectory(workspaceId, parent, name);
+        if (existed != null) {
+            return existed.getId();
+        }
         assertDisplayUnique(ws.getId(), parent, name);
 
         LocalDateTime now = LocalDateTime.now();
@@ -348,8 +398,8 @@ public class WorkspaceFsService {
     }
 
     /**
-     * 创建文本交付文件：允许 .md / .html（.htm）；无扩展名时默认补 .md。
-     * 工作台「新建」UI 仍只建 md；html 来自上传或 Agent write_output。
+     * 创建文本交付文件：允许 .md / .html（.htm）/ .json；无扩展名时默认补 .md。
+     * 工作台「新建」UI 仍只建 md；html/json 来自上传或 Agent write_output。
      */
     @Transactional
     public Long createMarkdownFile(Long workspaceId, Long parentId, String displayName, String content) {
@@ -368,6 +418,7 @@ public class WorkspaceFsService {
         file.setNodeType(WorkspaceNodeType.FILE.name());
         file.setDisplayName(name);
         file.setStorageName(storageFile);
+        file.setHidden(false);
         file.setCreatedAt(now);
         file.setUpdatedAt(now);
         nodeMapper.insert(file);
@@ -384,6 +435,102 @@ public class WorkspaceFsService {
         }
         rewriteManifest(ws);
         return file.getId();
+    }
+
+    /** 查找同目录同名文件（含 hidden） */
+    public SysWorkspaceNode findChildFile(Long workspaceId, Long parentId, String displayName) {
+        if (!StringUtils.hasText(displayName)) {
+            return null;
+        }
+        String name = normalizeTextFileName(displayName);
+        LambdaQueryWrapper<SysWorkspaceNode> qw = new LambdaQueryWrapper<SysWorkspaceNode>()
+                .eq(SysWorkspaceNode::getWorkspaceId, workspaceId)
+                .eq(SysWorkspaceNode::getNodeType, WorkspaceNodeType.FILE.name())
+                .eq(SysWorkspaceNode::getDisplayName, name)
+                .last("LIMIT 1");
+        if (parentId == null) {
+            qw.isNull(SysWorkspaceNode::getParentId);
+        } else {
+            qw.eq(SysWorkspaceNode::getParentId, parentId);
+        }
+        return nodeMapper.selectOne(qw);
+    }
+
+    /**
+     * 创建或覆盖同名文本文件；{@code hidden=true} 时不出现在个人空间目录树。
+     * @return 文件节点 ID
+     */
+    @Transactional
+    public Long upsertTextFile(Long workspaceId, Long parentId, String displayName, String content, boolean hidden) {
+        SysWorkspace ws = requireOwnedPersonal(workspaceId);
+        ensureWorkspaceDir(ws);
+        String name = normalizeTextFileName(displayName);
+        Long parent = resolveParentDirId(ws.getId(), parentId);
+        SysWorkspaceNode existing = findChildFile(ws.getId(), parent, name);
+        if (existing != null) {
+            updateFileContent(ws.getId(), existing.getId(), content);
+            if (!Objects.equals(Boolean.TRUE.equals(existing.getHidden()), hidden)) {
+                existing.setHidden(hidden);
+                existing.setUpdatedAt(LocalDateTime.now());
+                nodeMapper.updateById(existing);
+            }
+            return existing.getId();
+        }
+        LocalDateTime now = LocalDateTime.now();
+        String storageFile = randomStorageName(extOf(name));
+        SysWorkspaceNode file = new SysWorkspaceNode();
+        file.setTenantId(ws.getTenantId());
+        file.setWorkspaceId(ws.getId());
+        file.setParentId(parent);
+        file.setNodeType(WorkspaceNodeType.FILE.name());
+        file.setDisplayName(name);
+        file.setStorageName(storageFile);
+        file.setHidden(hidden);
+        file.setCreatedAt(now);
+        file.setUpdatedAt(now);
+        nodeMapper.insert(file);
+
+        Path parentPath = parent == null
+                ? resolveWorkspacePath(ws)
+                : resolveNodePath(ws, requireNode(ws.getId(), parent));
+        String body = content == null ? "" : content;
+        try {
+            Files.createDirectories(parentPath);
+            Files.writeString(parentPath.resolve(storageFile), body, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new BizException("创建文件失败");
+        }
+        rewriteManifest(ws);
+        return file.getId();
+    }
+
+    /** 设置节点 hidden；目录树仅展示 hidden=false */
+    @Transactional
+    public void setHidden(Long workspaceId, Long nodeId, boolean hidden) {
+        SysWorkspaceNode node = requireNode(workspaceId, nodeId);
+        if (Objects.equals(Boolean.TRUE.equals(node.getHidden()), hidden)) {
+            return;
+        }
+        node.setHidden(hidden);
+        node.setUpdatedAt(LocalDateTime.now());
+        nodeMapper.updateById(node);
+    }
+
+    /** 将指定父目录下若干文件名取消隐藏（不存在则跳过） */
+    @Transactional
+    public void unhideFiles(Long workspaceId, Long parentId, List<String> displayNames) {
+        if (displayNames == null || displayNames.isEmpty()) {
+            return;
+        }
+        for (String name : displayNames) {
+            if (!StringUtils.hasText(name)) {
+                continue;
+            }
+            SysWorkspaceNode f = findChildFile(workspaceId, parentId, name.trim());
+            if (f != null && Boolean.TRUE.equals(f.getHidden())) {
+                setHidden(workspaceId, f.getId(), false);
+            }
+        }
     }
 
     @Transactional
@@ -468,7 +615,7 @@ public class WorkspaceFsService {
         return name;
     }
 
-    /** 允许 .md / .html / .htm；其它扩展名拒绝；无扩展名默认 .md */
+    /** 允许 .md / .html / .htm / .json；其它扩展名拒绝；无扩展名默认 .md */
     private String normalizeTextFileName(String displayName) {
         if (!StringUtils.hasText(displayName)) {
             throw new BizException("请输入名称");
@@ -478,11 +625,14 @@ public class WorkspaceFsService {
             throw new BizException("名称非法");
         }
         String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(".md") || lower.endsWith(".html") || lower.endsWith(".htm")) {
+        if (lower.endsWith(".md")
+                || lower.endsWith(".html")
+                || lower.endsWith(".htm")
+                || lower.endsWith(".json")) {
             return name;
         }
         if (name.contains(".")) {
-            throw new BizException("仅支持 .md 或 .html 文件：" + name);
+            throw new BizException("仅支持 .md / .html / .json 文件：" + name);
         }
         return name + ".md";
     }

@@ -4,6 +4,12 @@ import lombok.Data;
 
 @Data
 public class PipelineStartRequest {
-    /** 可选：从指定步骤开始，默认定义中 sort_order 最小的人闸/步骤 */
-    private String fromStepCode;
+    /** 需求流水：与 issueId 二选一 */
+    private Long requirementId;
+    /** 问题单流水：与 requirementId 二选一 */
+    private Long issueId;
+    /**
+     * 可选；需求默认 RD_AUTO，问题单默认 ISSUE_AUTO。
+     */
+    private String definitionCode;
 }

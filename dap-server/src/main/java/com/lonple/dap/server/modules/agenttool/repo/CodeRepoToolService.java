@@ -9,6 +9,8 @@ import com.lonple.dap.server.modules.chat.entity.WbChatSession;
 import com.lonple.dap.server.modules.chat.entity.WbSessionCodeRepo;
 import com.lonple.dap.server.modules.chat.mapper.ChatSessionMapper;
 import com.lonple.dap.server.modules.chat.mapper.SessionCodeRepoMapper;
+import com.lonple.dap.server.modules.sandbox.SandboxCodeBridge;
+import com.lonple.dap.server.modules.sandbox.SandboxProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -47,6 +49,8 @@ public class CodeRepoToolService {
     private final RipgrepSearchService ripgrepSearchService;
     private final RipgrepProperties ripgrepProperties;
     private final CodeRepoProcessRegistry processRegistry;
+    private final SandboxProperties sandboxProperties;
+    private final SandboxCodeBridge sandboxCodeBridge;
 
     public WbChatSession requireSession(Long sessionId) {
         WbChatSession session = sessionMapper.selectById(sessionId);
@@ -86,6 +90,7 @@ public class CodeRepoToolService {
     }
 
     public CodeRepoDtos.ListResult listDir(Long sessionId, Integer repoIndex, String localPath, String relativePath) {
+        // 只读：始终本机，不经 Docker
         Path root = resolveRepoRoot(sessionId, repoIndex, localPath);
         String rel = StringUtils.hasText(relativePath) ? relativePath : ".";
         Path dir = ".".equals(rel) || rel.isBlank()
@@ -127,6 +132,7 @@ public class CodeRepoToolService {
     public CodeRepoDtos.ReadResult readFile(
             Long sessionId, Integer repoIndex, String localPath, String relativePath,
             Integer startLine, Integer endLine, Integer maxChars) {
+        // 只读：始终本机
         Path root = resolveRepoRoot(sessionId, repoIndex, localPath);
         Path file = RepoPathSandbox.resolveInRepo(root, relativePath, true);
         if (!Files.isRegularFile(file)) {
@@ -169,6 +175,10 @@ public class CodeRepoToolService {
 
     public CodeRepoDtos.GenericResult writeFile(
             Long sessionId, Integer repoIndex, String localPath, String relativePath, String content) {
+        // 有 ATTACHED lease 才进容器写；无 lease 仍本机（评审等不占用沙箱）
+        if (sandboxCodeBridge.shouldRouteMutating(sessionId)) {
+            return sandboxCodeBridge.writeFile(sessionId, relativePath, content);
+        }
         Path root = resolveRepoRoot(sessionId, repoIndex, localPath);
         CodeContentGuard.assertWritableRelativePath(relativePath);
         CodeContentGuard.assertContentSafe(content == null ? "" : content, abs -> underRepos(sessionId, abs));
@@ -210,6 +220,9 @@ public class CodeRepoToolService {
 
     public CodeRepoDtos.GenericResult deleteFile(
             Long sessionId, Integer repoIndex, String localPath, String relativePath) {
+        if (sandboxCodeBridge.shouldRouteMutating(sessionId)) {
+            return sandboxCodeBridge.deleteFile(sessionId, relativePath);
+        }
         Path root = resolveRepoRoot(sessionId, repoIndex, localPath);
         CodeContentGuard.assertWritableRelativePath(relativePath);
         Path target = RepoPathSandbox.resolveInRepo(root, relativePath, true);
@@ -237,6 +250,7 @@ public class CodeRepoToolService {
 
     public Map<String, Object> searchInRepo(
             Long sessionId, Integer repoIndex, String localPath, String query) {
+        // 只读搜索：始终本机
         Path root = resolveRepoRoot(sessionId, repoIndex, localPath);
         if (!StringUtils.hasText(query)) {
             throw new BizException("query 不能为空");
@@ -356,6 +370,13 @@ public class CodeRepoToolService {
     public CodeRepoDtos.ActionResult runAction(
             Long sessionId, Integer repoIndex, String localPath, String action, Map<String, String> args) {
         String act = action == null ? "" : action.trim().toLowerCase(Locale.ROOT);
+        if (sandboxCodeBridge.shouldRouteMutating(sessionId)
+                && !"stop_dev".equals(act)
+                && !"check_port".equals(act)
+                && !"list_processes".equals(act)
+                && !"stop_port".equals(act)) {
+            return sandboxCodeBridge.runAction(sessionId, act, args);
+        }
         if ("stop_dev".equals(act)) {
             int n = processRegistry.stopAll(sessionId);
             CodeRepoDtos.ActionResult r = new CodeRepoDtos.ActionResult();

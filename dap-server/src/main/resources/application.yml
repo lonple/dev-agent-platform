@@ -59,6 +59,38 @@ dap:
       max-hits: 40
       max-count-per-file: 5
 
+  review:
+    data-dir: ${DAP_REVIEW_DATA_DIR:review-data}
+    diff:
+      max-chars: 200000
+      max-files: 80
+      single-max-files: 25
+      single-max-chars: 80000
+      shard-max-files: 20
+      shard-max-chars: 60000
+    context:
+      max-file-chars: 30000
+      max-total-chars: 80000
+    llm:
+      max-rounds: 8
+    # 与 dap-agent 共用同一套 LLM_*（不再强制单独 DAP_REVIEW_LLM_*）
+    model:
+      enabled: ${DAP_REVIEW_LLM_ENABLED:true}
+      api-key: ${DAP_REVIEW_LLM_API_KEY:${LLM_API_KEY:${ADA_LLM_API_KEY:}}}
+      base-url: ${DAP_REVIEW_LLM_BASE_URL:${LLM_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}}
+      chat-model: ${DAP_REVIEW_LLM_CHAT_MODEL:${LLM_MODEL:qwen-max}}
+    partition:
+      module-depth: 2
+      parallelism: 4
+    knowledge:
+      base-url: ${DAP_REVIEW_KNOWLEDGE_BASE_URL:http://127.0.0.1:8010}
+    rules:
+      java-path: ${DAP_REVIEW_JAVA_RULES:rule/java_review.md}
+      frontend-path: ${DAP_REVIEW_FRONTEND_RULES:rule/frontend_review.md}
+      mybatis-xml-path: ${DAP_REVIEW_MYBATIS_RULES:rule/mybatis_xml_review.md}
+      sql-path: ${DAP_REVIEW_SQL_RULES:rule/sql_review.md}
+      config-path: ${DAP_REVIEW_CONFIG_RULES:rule/config_review.md}
+
 logging:
   charset:
     console: UTF-8

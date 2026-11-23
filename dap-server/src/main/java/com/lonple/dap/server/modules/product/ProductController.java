@@ -95,7 +95,8 @@ public class ProductController {
     private void assertCanViewProducts() {
         LoginUser user = UserContext.require();
         if (!user.getPermissions().contains("product:view")
-                && !user.getPermissions().contains("requirement:view")) {
+                && !user.getPermissions().contains("requirement:view")
+                && !user.getPermissions().contains("issue:view")) {
             throw new BizException(403, "无权限查看产品");
         }
     }

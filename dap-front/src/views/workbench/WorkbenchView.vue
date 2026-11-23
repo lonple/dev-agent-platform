@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Folder, List, Notebook, Refresh } from '@element-plus/icons-vue'
 import {
   addRequirementHandlers,
   approveRequirement,
+  completeRequirement,
   deleteRequirement,
   developRequirement,
   getRequirement,
@@ -19,6 +20,15 @@ import {
   type RequirementStatus,
   type WorkbenchScope,
 } from '../../api/requirement'
+import {
+  changeIssueStatus,
+  getIssue,
+  listIssueWorkbench,
+  type IssueItem,
+  type IssueStatus,
+  type IssueWorkbenchScope,
+} from '../../api/issue'
+import AuthMarkdownBody from '../../components/AuthMarkdownBody.vue'
 import { listPositions, type PositionItem } from '../../api/position'
 import { listProductVersions, type ProductVersionItem } from '../../api/product'
 import {
@@ -36,7 +46,6 @@ import { useAuthStore } from '../../stores/auth'
 import { formatDateTime } from '../../utils/date'
 import WorkbenchSpacesPane from './WorkbenchSpacesPane.vue'
 import WorkbenchWikiPane from './WorkbenchWikiPane.vue'
-import RequirementPipelinePanel from './RequirementPipelinePanel.vue'
 
 type LeftPanel = 'requirements' | 'workspaces' | 'wiki'
 
@@ -49,6 +58,7 @@ interface ReqTreeNode {
 }
 
 const auth = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 
 const isCurrentHandler = computed(
@@ -87,6 +97,27 @@ const canDeleteRequirement = computed(
 const leftWidth = ref(300)
 const dragging = ref(false)
 const leftPanel = ref<LeftPanel>('requirements')
+/** 任务面板内手风琴：需求列表 / 问题列表；null = 均收起 */
+const taskSection = ref<'req' | 'issue' | null>('req')
+
+const issues = ref<IssueItem[]>([])
+const loadingIssues = ref(false)
+const activeIssueId = ref<number | null>(null)
+const issueDetail = ref<IssueItem | null>(null)
+const loadingIssueDetail = ref(false)
+
+const ISSUE_STATUS_TAG: Record<IssueStatus, '' | 'info' | 'success' | 'warning' | 'danger'> = {
+  OPEN: 'warning',
+  IN_PROGRESS: '',
+  DONE: 'success',
+}
+
+/** 当前状态 → 下一状态操作（只展示一个推进按钮） */
+const ISSUE_NEXT_ACTION: Record<IssueStatus, { status: IssueStatus; label: string } | null> = {
+  OPEN: { status: 'IN_PROGRESS', label: '开始处理' },
+  IN_PROGRESS: { status: 'DONE', label: '完成' },
+  DONE: null,
+}
 
 const personalWorkspaces = ref<TenantWorkspaceItem[]>([])
 const activeWorkspaceId = ref<number | null>(null)
@@ -130,6 +161,7 @@ const defaultWorkDir = computed(() => {
 })
 
 const listScope = ref<WorkbenchScope>('todo')
+const issueListScope = ref<IssueWorkbenchScope>('todo')
 const requirements = ref<RequirementItem[]>([])
 const activeId = ref<number | null>(null)
 const detail = ref<RequirementItem | null>(null)
@@ -150,8 +182,6 @@ const planForm = reactive({
 const planRules: FormRules = {
   releaseVersionId: [{ required: true, message: '请选择发布版本', trigger: 'change' }],
 }
-
-const pipelineAutomationVisible = ref(false)
 
 const STATUS_TAG: Record<RequirementStatus, '' | 'info' | 'success' | 'warning' | 'danger'> = {
   DRAFT: 'info',
@@ -226,7 +256,26 @@ async function bootstrap() {
     if (leftPanel.value === 'workspaces') {
       await refreshWorkspaces()
     } else {
-      await refreshList()
+      const qIssue = Number(route.query.issueId)
+      const qReq = Number(route.query.requirementId)
+      if (Number.isFinite(qIssue) && qIssue > 0) {
+        taskSection.value = 'issue'
+        await refreshIssues(false)
+        const hit = issues.value.find((i) => i.id === qIssue)
+        if (hit) await selectIssue(hit)
+        else await loadIssueDetail(qIssue)
+      } else {
+        taskSection.value = 'req'
+        await refreshList(false)
+        if (Number.isFinite(qReq) && qReq > 0) {
+          const hit = requirements.value.find((r) => r.id === qReq)
+          if (hit) await selectReq(hit)
+          else {
+            activeId.value = qReq
+            await loadDetail(qReq)
+          }
+        }
+      }
     }
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '初始化失败')
@@ -237,7 +286,11 @@ async function bootstrap() {
 async function switchLeftPanel(panel: LeftPanel) {
   leftPanel.value = panel
   if (panel === 'requirements') {
-    await refreshList()
+    if (taskSection.value === 'issue') {
+      await refreshIssues()
+    } else {
+      await refreshList()
+    }
   } else if (panel === 'workspaces') {
     await refreshWorkspaces()
   }
@@ -377,6 +430,72 @@ async function refreshList(keepSelection = true) {
   }
 }
 
+async function refreshIssues(keepSelection = true) {
+  loadingIssues.value = true
+  try {
+    issues.value = await listIssueWorkbench(issueListScope.value)
+    if (!keepSelection) {
+      activeIssueId.value = null
+      issueDetail.value = null
+      return
+    }
+    if (activeIssueId.value != null) {
+      const still = issues.value.find((i) => i.id === activeIssueId.value)
+      if (!still) {
+        activeIssueId.value = null
+        issueDetail.value = null
+      } else {
+        await loadIssueDetail(activeIssueId.value)
+      }
+    }
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '加载问题列表失败')
+  } finally {
+    loadingIssues.value = false
+  }
+}
+
+async function loadIssueDetail(id: number) {
+  loadingIssueDetail.value = true
+  try {
+    issueDetail.value = await getIssue(id)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '加载问题详情失败')
+    issueDetail.value = null
+  } finally {
+    loadingIssueDetail.value = false
+  }
+}
+
+async function selectIssue(item: IssueItem) {
+  taskSection.value = 'issue'
+  activeIssueId.value = item.id
+  activeId.value = null
+  detail.value = null
+  await loadIssueDetail(item.id)
+}
+
+function openTaskSection(section: 'req' | 'issue') {
+  if (taskSection.value === section) {
+    taskSection.value = null
+    return
+  }
+  taskSection.value = section
+  if (section === 'req') {
+    void refreshList()
+  } else {
+    void refreshIssues()
+  }
+}
+
+function openIssuePipeline() {
+  if (!issueDetail.value) return
+  router.push({
+    name: 'issue-pipeline',
+    params: { issueId: String(issueDetail.value.id) },
+  })
+}
+
 async function loadDetail(id: number) {
   loadingDetail.value = true
   try {
@@ -390,6 +509,9 @@ async function loadDetail(id: number) {
 }
 
 async function selectReq(item: RequirementItem) {
+  taskSection.value = 'req'
+  activeIssueId.value = null
+  issueDetail.value = null
   activeId.value = item.id
   await loadDetail(item.id)
 }
@@ -404,6 +526,12 @@ async function onScopeChange() {
   activeId.value = null
   detail.value = null
   await refreshList(false)
+}
+
+async function onIssueScopeChange() {
+  activeIssueId.value = null
+  issueDetail.value = null
+  await refreshIssues(false)
 }
 
 async function doApprove() {
@@ -487,6 +615,14 @@ async function confirmPlan() {
   }
 }
 
+function openPipeline() {
+  if (!detail.value?.id) return
+  router.push({
+    name: 'requirement-pipeline',
+    params: { requirementId: String(detail.value.id) },
+  })
+}
+
 async function doDevelop() {
   if (!detail.value) return
   try {
@@ -509,6 +645,48 @@ async function doDevelop() {
     actionLoading.value = false
   }
 }
+
+async function doCompleteRequirement() {
+  if (!detail.value) return
+  try {
+    await ElMessageBox.confirm('确认将需求标记为「完成」？', '完成', { type: 'warning' })
+  } catch {
+    return
+  }
+  actionLoading.value = true
+  try {
+    await completeRequirement(detail.value.id)
+    ElMessage.success('需求已完成')
+    await refreshList()
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '操作失败')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function doChangeIssueStatus(status: IssueStatus) {
+  if (!issueDetail.value || issueDetail.value.status === status) return
+  const id = issueDetail.value.id
+  actionLoading.value = true
+  try {
+    await changeIssueStatus(id, status)
+    ElMessage.success('状态已更新')
+    await refreshIssues(true)
+    if (activeIssueId.value === id) {
+      await loadIssueDetail(id)
+    }
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '状态更新失败')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const issueNextAction = computed(() => {
+  if (!issueDetail.value) return null
+  return ISSUE_NEXT_ACTION[issueDetail.value.status] ?? null
+})
 
 async function doDeleteRequirement() {
   if (!detail.value) return
@@ -669,52 +847,114 @@ onMounted(() => {
     <template v-if="leftPanel === 'requirements'">
     <div class="pane pane-left" :style="{ width: leftWidth + 'px' }">
         <div class="pane-hd">
-          <span class="pos-label">需求列表</span>
-          <el-button circle size="small" :icon="Refresh" title="刷新" @click="refreshList()" />
+          <span class="pos-label">任务列表</span>
+          <el-button
+            circle
+            size="small"
+            :icon="Refresh"
+            title="刷新"
+            @click="
+              taskSection === 'issue'
+                ? refreshIssues()
+                : taskSection === 'req'
+                  ? refreshList()
+                  : Promise.all([refreshList(), refreshIssues()])
+            "
+          />
         </div>
-        <div class="scope-bar">
-          <el-radio-group v-model="listScope" size="small" @change="onScopeChange">
-            <el-radio-button value="todo">待办</el-radio-button>
-            <el-radio-button value="all">全部</el-radio-button>
-          </el-radio-group>
-        </div>
-        <div class="pane-bd req-tree-wrap" v-loading="loadingList">
-          <el-tree
-            v-if="reqTree.length"
-            :data="reqTree"
-            node-key="key"
-            default-expand-all
-            highlight-current
-            :expand-on-click-node="false"
-            :current-node-key="activeId != null ? `r-${activeId}` : undefined"
-            :props="{ label: 'label', children: 'children' }"
-            @node-click="onTreeNodeClick"
+        <div class="task-acc">
+          <button
+            type="button"
+            class="task-acc-hd"
+            :class="{ open: taskSection === 'req' }"
+            @click="openTaskSection('req')"
           >
-            <template #default="{ data }">
-              <div class="tree-node" :class="data.type">
-                <template v-if="data.type === 'req' && data.requirement">
-                  <span class="tree-req-name">
-                    <span v-if="data.requirement.reqNo" class="tree-req-no">
-                      {{ data.requirement.reqNo }}
-                    </span>
-                    {{ data.label }}
-                  </span>
-                  <el-tag
-                    :type="STATUS_TAG[data.requirement.status as RequirementStatus] ?? 'info'"
-                    size="small"
-                  >
-                    {{ data.requirement.statusLabel || data.requirement.status }}
-                  </el-tag>
+            需求列表
+          </button>
+          <div v-show="taskSection === 'req'" class="task-acc-bd">
+            <div class="scope-bar">
+              <el-radio-group v-model="listScope" size="small" @change="onScopeChange">
+                <el-radio-button value="todo">待办</el-radio-button>
+                <el-radio-button value="all">全部</el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="pane-bd req-tree-wrap" v-loading="loadingList">
+              <el-tree
+                v-if="reqTree.length"
+                :data="reqTree"
+                node-key="key"
+                default-expand-all
+                highlight-current
+                :expand-on-click-node="false"
+                :current-node-key="activeId != null ? `r-${activeId}` : undefined"
+                :props="{ label: 'label', children: 'children' }"
+                @node-click="onTreeNodeClick"
+              >
+                <template #default="{ data }">
+                  <div class="tree-node" :class="data.type">
+                    <template v-if="data.type === 'req' && data.requirement">
+                      <span class="tree-req-name">
+                        <span v-if="data.requirement.reqNo" class="tree-req-no">
+                          {{ data.requirement.reqNo }}
+                        </span>
+                        {{ data.label }}
+                      </span>
+                      <el-tag
+                        :type="STATUS_TAG[data.requirement.status as RequirementStatus] ?? 'info'"
+                        size="small"
+                      >
+                        {{ data.requirement.statusLabel || data.requirement.status }}
+                      </el-tag>
+                    </template>
+                    <template v-else>
+                      <span class="tree-group">{{ data.label }}</span>
+                      <span v-if="data.type === 'version'" class="tree-hint">版本</span>
+                    </template>
+                  </div>
                 </template>
-                <template v-else>
-                  <span class="tree-group">{{ data.label }}</span>
-                  <span v-if="data.type === 'version'" class="tree-hint">版本</span>
-                </template>
+              </el-tree>
+              <div v-else-if="!loadingList" class="empty">
+                {{ listScope === 'todo' ? '暂无待办需求' : '暂无需求' }}
               </div>
-            </template>
-          </el-tree>
-          <div v-else-if="!loadingList" class="empty">
-            {{ listScope === 'todo' ? '暂无待办需求' : '暂无需求' }}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="task-acc-hd"
+            :class="{ open: taskSection === 'issue' }"
+            @click="openTaskSection('issue')"
+          >
+            问题列表
+          </button>
+          <div v-show="taskSection === 'issue'" class="task-acc-bd">
+            <div class="scope-bar">
+              <el-radio-group v-model="issueListScope" size="small" @change="onIssueScopeChange">
+                <el-radio-button value="todo">待办</el-radio-button>
+                <el-radio-button value="all">全部</el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="pane-bd issue-list-wrap" v-loading="loadingIssues">
+              <button
+                v-for="item in issues"
+                :key="item.id"
+                type="button"
+                class="issue-row"
+                :class="{ active: activeIssueId === item.id }"
+                @click="selectIssue(item)"
+              >
+                <span class="issue-row-main">
+                  <span class="tree-req-no">{{ item.issueNo }}</span>
+                  <span class="issue-desc">{{ item.description }}</span>
+                </span>
+                <el-tag :type="ISSUE_STATUS_TAG[item.status] ?? 'info'" size="small">
+                  {{ item.statusLabel || item.status }}
+                </el-tag>
+              </button>
+              <div v-if="!loadingIssues && !issues.length" class="empty">
+                {{ issueListScope === 'todo' ? '暂无待办问题' : '暂无问题' }}
+              </div>
+            </div>
           </div>
         </div>
     </div>
@@ -727,9 +967,67 @@ onMounted(() => {
 
     <div
       class="pane pane-mid"
-      v-loading="loadingDetail"
+      v-loading="issueDetail ? loadingIssueDetail : loadingDetail"
     >
-      <template v-if="detail">
+      <template v-if="issueDetail">
+        <div class="pane-hd req-hd">
+          <span class="title">
+            <span class="title-no">{{ issueDetail.issueNo }}</span>
+            问题详情
+          </span>
+          <el-tag :type="ISSUE_STATUS_TAG[issueDetail.status] ?? 'info'" size="small">
+            {{ issueDetail.statusLabel || issueDetail.status }}
+          </el-tag>
+          <div class="req-hd-actions">
+            <el-button
+              v-if="issueNextAction"
+              size="small"
+              type="primary"
+              :loading="actionLoading"
+              @click="doChangeIssueStatus(issueNextAction.status)"
+            >
+              {{ issueNextAction.label }}
+            </el-button>
+            <el-button size="small" type="primary" @click="openIssuePipeline">
+              自动化流水
+            </el-button>
+          </div>
+        </div>
+        <div class="pane-bd detail-bd">
+          <el-descriptions :column="1" border size="small">
+            <el-descriptions-item label="产品">
+              {{ issueDetail.productName || issueDetail.productId }}
+            </el-descriptions-item>
+            <el-descriptions-item label="关联需求">
+              {{
+                issueDetail.requirementNo
+                  ? `${issueDetail.requirementNo} ${issueDetail.requirementName || ''}`
+                  : '—'
+              }}
+            </el-descriptions-item>
+            <el-descriptions-item label="处理人">
+              {{ issueDetail.handlerUsername || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="问题描述">
+              <div class="pre-wrap">{{ issueDetail.description }}</div>
+            </el-descriptions-item>
+            <el-descriptions-item label="实现步骤">
+              <AuthMarkdownBody
+                v-if="issueDetail.steps"
+                :content="issueDetail.steps"
+              />
+              <span v-else>—</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="预期结果">
+              <div class="pre-wrap">{{ issueDetail.expectedResult || '—' }}</div>
+            </el-descriptions-item>
+            <el-descriptions-item label="解决方案">
+              <div class="pre-wrap">{{ issueDetail.solution || '—' }}</div>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+      </template>
+      <template v-else-if="detail">
         <div class="pane-hd req-hd">
           <span class="title">
             <span v-if="detail.reqNo" class="title-no">{{ detail.reqNo }}</span>
@@ -739,9 +1037,6 @@ onMounted(() => {
             {{ detail.statusLabel || detail.status }}
           </el-tag>
           <div class="req-hd-actions">
-            <el-button size="small" type="primary" @click="pipelineAutomationVisible = true">
-              自动化流水线
-            </el-button>
             <template v-if="isCurrentHandler">
               <template v-if="detail.status === 'APPROVING'">
                 <el-button size="small" type="danger" plain :loading="actionLoading" @click="openReject">
@@ -761,7 +1056,25 @@ onMounted(() => {
                   投入研发
                 </el-button>
               </template>
+              <template v-else-if="detail.status === 'DEVELOPING'">
+                <el-button
+                  size="small"
+                  type="success"
+                  :loading="actionLoading"
+                  @click="doCompleteRequirement"
+                >
+                  完成
+                </el-button>
+              </template>
             </template>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              @click="openPipeline"
+            >
+              自动化流水线
+            </el-button>
             <el-button
               v-if="canDeleteRequirement"
               size="small"
@@ -841,20 +1154,17 @@ onMounted(() => {
 
       </template>
       <div v-else class="mid-empty">
-        <p>从左侧选择一条需求</p>
-        <p class="sub">按产品 / 版本浏览；审批与计划在此完成</p>
+        <p v-if="taskSection === 'issue'">从左侧选择一条问题</p>
+        <p v-else>从左侧选择一条需求</p>
+        <p class="sub">
+          {{
+            taskSection === 'issue'
+              ? '查看详情后可启动问题单自动化流水'
+              : '按产品 / 版本浏览；审批与计划在此完成'
+          }}
+        </p>
       </div>
 
-      <div
-        v-if="detail && pipelineAutomationVisible"
-        class="pipeline-overlay"
-      >
-        <RequirementPipelinePanel
-          mode="automation"
-          :requirement-id="detail.id"
-          @close="pipelineAutomationVisible = false"
-        />
-      </div>
     </div>
     </template>
     <WorkbenchWikiPane v-else-if="leftPanel === 'wiki'" />
@@ -866,11 +1176,11 @@ onMounted(() => {
         type="button"
         class="wb-tool"
         :class="{ active: leftPanel === 'requirements' }"
-        title="需求列表"
+        title="任务列表"
         @click="switchLeftPanel('requirements')"
       >
         <el-icon :size="20"><List /></el-icon>
-        <span>需求列表</span>
+        <span>任务</span>
       </button>
       <button
         type="button"
@@ -1121,19 +1431,14 @@ onMounted(() => {
 .pane-left {
   border-right: 1px solid var(--dap-gray-200);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .pane-mid {
   flex: 1;
   min-width: 360px;
   position: relative;
-}
-.pipeline-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  background: var(--dap-gray-0);
-  display: flex;
-  flex-direction: column;
 }
 .wb-toolbar {
   height: 52px;
@@ -1624,5 +1929,77 @@ onMounted(() => {
   margin-top: 6px;
   color: var(--dap-gray-500);
   font-size: 12px;
+}
+.task-acc {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.task-acc-hd {
+  flex-shrink: 0;
+  border: none;
+  border-bottom: 1px solid var(--dap-gray-200);
+  background: var(--dap-gray-50);
+  padding: 10px 14px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dap-gray-700);
+  cursor: pointer;
+}
+.task-acc-hd.open {
+  color: var(--dap-primary);
+  background: var(--dap-primary-light);
+}
+.task-acc-bd {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.issue-list-wrap {
+  padding: 8px;
+  overflow: auto;
+}
+.issue-row {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: var(--dap-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.issue-row:hover {
+  background: var(--dap-gray-50);
+}
+.issue-row.active {
+  background: var(--dap-primary-light);
+}
+.issue-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.issue-desc {
+  font-size: 13px;
+  color: var(--dap-gray-800);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

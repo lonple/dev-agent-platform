@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import {
   createPrompt,
   deletePrompt,
+  ensurePreReviewPrompts,
   listPrompts,
   updatePrompt,
   type PromptItem,
@@ -15,14 +16,26 @@ import {
 } from '../../api/tenantWorkspace'
 import MarkdownBody from '../../components/MarkdownBody.vue'
 import { useAuthStore } from '../../stores/auth'
+import {
+  PIPELINE_PROMPT_NODES,
+  type PipelinePromptNode,
+  type PipelinePromptSlot,
+} from './pipelinePromptNodes'
 
 const auth = useAuthStore()
 const canOperate = computed(() => auth.hasPermission('prompt:operate'))
 
 const loading = ref(false)
+const ensuring = ref(false)
 const rows = ref<PromptItem[]>([])
 const positions = ref<PositionItem[]>([])
 const taskTypes = ref<SessionTaskTypeOption[]>([])
+
+const selectedNodeId = ref(PIPELINE_PROMPT_NODES[0]?.id ?? '')
+const selectedNode = computed(
+  () => PIPELINE_PROMPT_NODES.find((n) => n.id === selectedNodeId.value) ?? null,
+)
+
 const selectedId = ref<number | null>(null)
 const selected = computed(() => rows.value.find((r) => r.id === selectedId.value) ?? null)
 
@@ -52,9 +65,48 @@ const taskTypesByKind = computed(() => ({
   review: taskTypes.value.filter((t) => t.kind === 'REVIEW'),
 }))
 
+interface NodeSlotView {
+  slot: PipelinePromptSlot
+  prompt: PromptItem | null
+  missingPosition: boolean
+}
+
+const nodeSlots = computed((): NodeSlotView[] => {
+  const node = selectedNode.value
+  if (!node) return []
+  return node.slots.map((slot) => {
+    const pos = positions.value.find(
+      (p) => (p.code || '').toUpperCase() === slot.positionCode.toUpperCase(),
+    )
+    const prompt =
+      rows.value.find(
+        (r) =>
+          (r.taskTypeCode || '').toUpperCase() === slot.taskTypeCode.toUpperCase() &&
+          ((r.positionCode || '').toUpperCase() === slot.positionCode.toUpperCase() ||
+            (pos != null && r.positionId === pos.id)),
+      ) ?? null
+    return { slot, prompt, missingPosition: !pos }
+  })
+})
+
+const nodeConfiguredCount = computed(
+  () => nodeSlots.value.filter((x) => x.prompt != null).length,
+)
+
 watch(selectedId, () => {
   viewMode.value = 'preview'
   editingContent.value = ''
+})
+
+watch(selectedNodeId, () => {
+  const first = nodeSlots.value.find((x) => x.prompt)?.prompt
+  selectedId.value = first?.id ?? null
+  viewMode.value = 'preview'
+})
+
+watch(nodeSlots, (slots) => {
+  if (selectedId.value != null && slots.some((x) => x.prompt?.id === selectedId.value)) return
+  selectedId.value = slots.find((x) => x.prompt)?.prompt?.id ?? null
 })
 
 async function loadOptions() {
@@ -68,14 +120,54 @@ async function load() {
   try {
     await loadOptions()
     rows.value = await listPrompts()
-    if (selectedId.value == null || !rows.value.some((r) => r.id === selectedId.value)) {
-      selectedId.value = rows.value[0]?.id ?? null
-    }
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '加载提示词失败')
   } finally {
     loading.value = false
   }
+}
+
+async function onEnsurePipeline() {
+  ensuring.value = true
+  try {
+    const res = await ensurePreReviewPrompts()
+    const parts: string[] = []
+    if (res.created?.length) parts.push(`新建 ${res.created.length} 条`)
+    if (res.skipped?.length) parts.push(`已存在跳过 ${res.skipped.length} 条`)
+    if (res.missingPositions?.length) {
+      parts.push(
+        `仍缺岗位编码：${res.missingPositions.join('、')}（请到岗位管理补齐，UI 设计需编码 UI）`,
+      )
+    }
+    ElMessage.success(parts.length ? parts.join('；') : '无需变更')
+    await load()
+    // 初始化后优先落到问题分析，便于核对 ISSUE_AUTO；否则 UI 设计
+    if (res.created?.some((c: string) => String(c).includes('GEN_ISSUE'))) {
+      selectedNodeId.value = 'issue_analyze'
+    } else if (res.created?.some((c: string) => String(c).includes('GEN_UI'))) {
+      selectedNodeId.value = 'gen_ui'
+    }
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '初始化失败')
+  } finally {
+    ensuring.value = false
+  }
+}
+
+function selectNode(node: PipelinePromptNode) {
+  selectedNodeId.value = node.id
+}
+
+function selectSlotPrompt(item: NodeSlotView) {
+  if (item.prompt) {
+    selectedId.value = item.prompt.id
+    return
+  }
+  if (!canOperate.value) {
+    ElMessage.warning('尚未配置该岗位提示词，请先初始化或新增')
+    return
+  }
+  openCreateForSlot(item.slot)
 }
 
 function onTaskTypeChange(code: string | undefined) {
@@ -88,7 +180,24 @@ function onTaskTypeChange(code: string | undefined) {
   if (match) metaForm.positionId = match.id
 }
 
+function openCreateForSlot(slot: PipelinePromptSlot) {
+  metaMode.value = 'create'
+  metaForm.code = `${slot.taskTypeCode}_${slot.positionCode}`
+  metaForm.name = `${selectedNode.value?.name ?? ''}·${slot.roleLabel}`
+  metaForm.taskTypeCode = slot.taskTypeCode
+  const match = positions.value.find(
+    (p) => (p.code || '').toUpperCase() === slot.positionCode.toUpperCase(),
+  )
+  metaForm.positionId = match?.id
+  metaDialog.value = true
+}
+
 function openCreate() {
+  const slot = selectedNode.value?.slots[0]
+  if (slot) {
+    openCreateForSlot(slot)
+    return
+  }
   metaMode.value = 'create'
   metaForm.code = ''
   metaForm.name = ''
@@ -188,6 +297,18 @@ async function saveContent() {
   }
 }
 
+function taskTypeName(code: string) {
+  return taskTypes.value.find((t) => t.code === code)?.name || code
+}
+
+function nodeHasAnyPrompt(node: PipelinePromptNode) {
+  return node.slots.some((slot) =>
+    rows.value.some(
+      (r) => (r.taskTypeCode || '').toUpperCase() === slot.taskTypeCode.toUpperCase(),
+    ),
+  )
+}
+
 onMounted(load)
 </script>
 
@@ -196,66 +317,118 @@ onMounted(load)
     <div class="page-hd">
       <div>
         <h2>提示词管理</h2>
-        <p class="hint">按「岗位 + 任务类型」维护；工作台创建任务会话时可按组合加载并直接执行</p>
+        <p class="hint">
+          左侧为流水线<strong>工作节点</strong>；右侧为该节点下各<strong>岗位任务</strong>提示词。覆盖初审、生成、评审、详细设计与测试用例等环节。
+        </p>
       </div>
-      <el-button v-if="canOperate" type="primary" @click="openCreate">新增提示词</el-button>
+      <div class="hd-actions">
+        <el-button v-if="canOperate" :loading="ensuring" @click="onEnsurePipeline">
+          初始化流水线提示词
+        </el-button>
+        <el-button v-if="canOperate" type="primary" @click="openCreate">新增提示词</el-button>
+      </div>
     </div>
+
     <div class="body">
-      <aside class="list">
+      <aside class="node-list">
+        <div class="pane-label">工作节点</div>
         <button
-          v-for="r in rows"
-          :key="r.id"
+          v-for="n in PIPELINE_PROMPT_NODES"
+          :key="n.id"
           type="button"
-          class="list-item"
-          :class="{ active: r.id === selectedId }"
-          @click="selectedId = r.id"
+          class="node-item"
+          :class="{ active: n.id === selectedNodeId }"
+          @click="selectNode(n)"
         >
-          <span class="item-name">{{ r.name }}</span>
-          <span class="item-sub">{{ r.taskTypeName || r.taskTypeCode }} · {{ r.positionName || '—' }}</span>
-          <span class="item-code">{{ r.code }}</span>
+          <span class="node-name">{{ n.name }}</span>
+          <span class="node-meta">
+            {{ n.slots.length }} 岗
+            <span v-if="nodeHasAnyPrompt(n)" class="dot ok" />
+            <span v-else class="dot miss" />
+          </span>
         </button>
-        <div v-if="!rows.length" class="empty">暂无提示词</div>
       </aside>
 
-      <section class="detail" v-if="selected">
-        <div class="detail-hd">
+      <section class="main-pane">
+        <div class="node-hd" v-if="selectedNode">
           <div>
-            <h3>{{ selected.name }}</h3>
+            <h3>{{ selectedNode.name }}</h3>
             <p class="meta">
-              编码 {{ selected.code }} · 任务 {{ selected.taskTypeName || selected.taskTypeCode }} · 岗位
-              {{ selected.positionName || selected.positionId }}
-              <template v-if="selected.positionCode"> ({{ selected.positionCode }})</template>
+              已配置 {{ nodeConfiguredCount }} / {{ selectedNode.slots.length }} 个岗位提示词
             </p>
-          </div>
-          <div class="actions">
-            <template v-if="viewMode === 'preview'">
-              <el-button v-if="canOperate" @click="openEditMeta">编辑信息</el-button>
-              <el-button v-if="canOperate" type="primary" @click="enterEdit">编辑内容</el-button>
-              <el-button v-if="canOperate" type="danger" plain @click="removeRow">删除</el-button>
-            </template>
-            <template v-else>
-              <el-button @click="cancelEdit">取消</el-button>
-              <el-button type="primary" :loading="savingContent" @click="saveContent">保存</el-button>
-            </template>
           </div>
         </div>
 
-        <div class="content-pane" :class="{ editing: viewMode === 'edit' }">
-          <div v-if="viewMode === 'preview'" class="md-preview">
-            <MarkdownBody v-if="selected.content" :content="selected.content" />
-            <div v-else class="empty-content">暂无内容，点击「编辑内容」编写 Markdown</div>
-          </div>
-          <el-input
-            v-else
-            v-model="editingContent"
-            type="textarea"
-            class="md-editor"
-            resize="none"
-            placeholder="支持 Markdown…"
-          />
+        <div class="split">
+          <aside class="role-list">
+            <div class="pane-label">本节点岗位任务</div>
+            <button
+              v-for="item in nodeSlots"
+              :key="item.slot.taskTypeCode + item.slot.positionCode"
+              type="button"
+              class="role-item"
+              :class="{
+                active: item.prompt && item.prompt.id === selectedId,
+                empty: !item.prompt,
+              }"
+              @click="selectSlotPrompt(item)"
+            >
+              <span class="role-name">{{ item.slot.roleLabel }}</span>
+              <span class="role-sub">{{ taskTypeName(item.slot.taskTypeCode) }}</span>
+              <span class="role-status">
+                <template v-if="item.missingPosition">缺岗位 {{ item.slot.positionCode }}</template>
+                <template v-else-if="item.prompt">已配置</template>
+                <template v-else>未配置 · 点击新增</template>
+              </span>
+            </button>
+            <div v-if="!nodeSlots.length" class="empty">本节点无岗位槽位</div>
+          </aside>
+
+          <section class="detail" v-if="selected">
+            <div class="detail-hd">
+              <div>
+                <h3>{{ selected.name }}</h3>
+                <p class="meta">
+                  编码 {{ selected.code }} · 任务
+                  {{ selected.taskTypeName || selected.taskTypeCode }} · 岗位
+                  {{ selected.positionName || selected.positionId }}
+                  <template v-if="selected.positionCode"> ({{ selected.positionCode }})</template>
+                </p>
+              </div>
+              <div class="actions">
+                <template v-if="viewMode === 'preview'">
+                  <el-button v-if="canOperate" @click="openEditMeta">编辑信息</el-button>
+                  <el-button v-if="canOperate" type="primary" @click="enterEdit">编辑内容</el-button>
+                  <el-button v-if="canOperate" type="danger" plain @click="removeRow">删除</el-button>
+                </template>
+                <template v-else>
+                  <el-button @click="cancelEdit">取消</el-button>
+                  <el-button type="primary" :loading="savingContent" @click="saveContent">
+                    保存
+                  </el-button>
+                </template>
+              </div>
+            </div>
+            <div class="content-pane" :class="{ editing: viewMode === 'edit' }">
+              <div v-if="viewMode === 'preview'" class="md-preview">
+                <MarkdownBody v-if="selected.content" :content="selected.content" />
+                <div v-else class="empty-content">暂无内容，点击「编辑内容」编写 Markdown</div>
+              </div>
+              <el-input
+                v-else
+                v-model="editingContent"
+                type="textarea"
+                class="md-editor"
+                resize="none"
+                placeholder="支持 Markdown…"
+              />
+            </div>
+          </section>
+          <section v-else class="detail empty-detail">
+            请选择右侧岗位任务；若未配置可点「初始化流水线提示词」或「新增」
+          </section>
         </div>
       </section>
-      <section v-else class="detail empty-detail">请选择左侧提示词</section>
     </div>
 
     <el-dialog
@@ -338,6 +511,13 @@ onMounted(load)
   justify-content: space-between;
   gap: var(--dap-space-4);
 }
+.hd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
 .page-hd h2 {
   margin: 0;
   font-size: 18px;
@@ -357,13 +537,21 @@ onMounted(load)
   border-radius: var(--dap-radius-md);
   overflow: hidden;
 }
-.list {
-  width: 280px;
+.pane-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dap-gray-500);
+  padding: 4px 8px 10px;
+}
+.node-list {
+  width: 220px;
   border-right: 1px solid var(--dap-gray-200);
   padding: var(--dap-space-3);
   overflow: auto;
+  flex-shrink: 0;
+  background: var(--dap-gray-50);
 }
-.list-item {
+.node-item {
   width: 100%;
   text-align: left;
   border: none;
@@ -376,25 +564,101 @@ onMounted(load)
   flex-direction: column;
   gap: 2px;
 }
-.list-item:hover {
-  background: var(--dap-gray-50);
+.node-item:hover {
+  background: var(--dap-gray-0);
 }
-.list-item.active {
+.node-item.active {
   background: var(--dap-primary-light);
   color: var(--dap-primary);
 }
-.item-name {
+.node-name {
   font-size: 14px;
   font-weight: 500;
 }
-.item-sub {
+.node-meta {
+  font-size: 12px;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot.ok {
+  background: var(--dap-success, #16a34a);
+}
+.dot.miss {
+  background: var(--dap-gray-300);
+}
+.main-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.node-hd {
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid var(--dap-gray-200);
+  flex-shrink: 0;
+}
+.node-hd h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.role-list {
+  width: 240px;
+  border-right: 1px solid var(--dap-gray-200);
+  padding: var(--dap-space-3);
+  overflow: auto;
+  flex-shrink: 0;
+}
+.role-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 10px 12px;
+  border-radius: var(--dap-radius-sm);
+  cursor: pointer;
+  color: var(--dap-gray-700);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.role-item:hover {
+  background: var(--dap-gray-50);
+}
+.role-item.active {
+  background: var(--dap-primary-light);
+  color: var(--dap-primary);
+  border-color: color-mix(in srgb, var(--dap-primary) 25%, transparent);
+}
+.role-item.empty {
+  border-style: dashed;
+  border-color: var(--dap-gray-200);
+}
+.role-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+.role-sub {
   font-size: 12px;
   opacity: 0.85;
 }
-.item-code {
+.role-status {
   font-size: 11px;
-  opacity: 0.65;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  opacity: 0.7;
 }
 .detail {
   flex: 1;

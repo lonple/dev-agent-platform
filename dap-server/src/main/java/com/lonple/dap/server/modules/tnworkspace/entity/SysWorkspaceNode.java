@@ -23,6 +23,8 @@ public class SysWorkspaceNode {
     /** 磁盘实际名（目录可为业务名；文件为随机字符） */
     private String storageName;
     private Long requirementId;
+    /** true=个人空间目录树不展示（文件仍可读写） */
+    private Boolean hidden;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

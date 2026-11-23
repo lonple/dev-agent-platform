@@ -1,7 +1,5 @@
 package com.lonple.dap.server.modules.chat.es;
 
-import com.lonple.dap.server.modules.pipeline.entity.PipeStepInstance;
-import com.lonple.dap.server.modules.pipeline.mapper.PipeStepInstanceMapper;
 import com.lonple.dap.server.modules.chat.entity.WbChatSession;
 import com.lonple.dap.server.security.LoginUser;
 import com.lonple.dap.server.security.UserContext;
@@ -12,8 +10,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
-import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -25,27 +21,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequiredArgsConstructor
 public class ChatStepRecorder {
 
-    private static final DateTimeFormatter ISO_MILLIS = DateTimeFormatter.ISO_INSTANT;
-
     private final ChatStepEsService chatStepEsService;
     private final ChatStepIndexProperties properties;
-    private final PipeStepInstanceMapper pipeStepInstanceMapper;
     private final ObjectMapper objectMapper;
 
     private final ConcurrentHashMap<String, AtomicInteger> seqByRun = new ConcurrentHashMap<>();
 
     public ChatStepWriteContext buildContext(WbChatSession session) {
         LoginUser user = UserContext.require();
-        Long pipeInstanceId = null;
-        String pipeStepCode = null;
-        Long pipeStepInstanceId = session.getPipeStepInstanceId();
-        if (pipeStepInstanceId != null) {
-            PipeStepInstance step = pipeStepInstanceMapper.selectById(pipeStepInstanceId);
-            if (step != null) {
-                pipeInstanceId = step.getInstanceId();
-                pipeStepCode = step.getStepCode();
-            }
-        }
         return ChatStepWriteContext.builder()
                 .tenantId(session.getTenantId())
                 .userId(user.getUserId())
@@ -56,9 +39,6 @@ public class ChatStepRecorder {
                 .requirementId(session.getRequirementId())
                 .taskTypeCode(session.getTaskTypeCode())
                 .positionId(session.getPositionId())
-                .pipeInstanceId(pipeInstanceId)
-                .pipeStepInstanceId(pipeStepInstanceId)
-                .pipeStepCode(pipeStepCode)
                 .build();
     }
 
@@ -102,9 +82,6 @@ public class ChatStepRecorder {
                     .detail(detail)
                     .status("ok")
                     .occurredAt(now.toString())
-                    .pipeInstanceId(ctx.getPipeInstanceId())
-                    .pipeStepInstanceId(ctx.getPipeStepInstanceId())
-                    .pipeStepCode(ctx.getPipeStepCode())
                     .build();
             chatStepEsService.index(doc);
         } catch (Exception ignored) {
@@ -118,37 +95,27 @@ public class ChatStepRecorder {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> truncateDetail(Map<String, Object> detail) {
-        if (detail == null) {
-            return null;
-        }
-        int max = Math.max(1000, properties.getStepDetailMaxChars());
-        Map<String, Object> out = new LinkedHashMap<>(detail);
-        Object result = out.get("result");
-        if (result instanceof String s && s.length() > max) {
-            out.put("result", s.substring(0, max) + "…(truncated)");
-        }
-        Object args = out.get("args");
-        if (args != null) {
-            try {
-                String raw = objectMapper.writeValueAsString(args);
-                if (raw.length() > max) {
-                    out.put("args", Map.of("_truncated", raw.substring(0, max) + "…"));
-                }
-            } catch (Exception ignored) {
-                // keep original
-            }
-        }
-        return out;
-    }
-
-    private static String text(JsonNode node, String field, String def) {
+    private String text(JsonNode node, String field, String def) {
         JsonNode n = node.path(field);
         if (n.isMissingNode() || n.isNull()) {
             return def;
         }
         String v = n.asText();
-        return v == null ? def : v;
+        return StringUtils.hasText(v) ? v : def;
+    }
+
+    private Map<String, Object> truncateDetail(Map<String, Object> detail) {
+        if (detail == null || properties.getStepDetailMaxChars() <= 0) {
+            return detail;
+        }
+        try {
+            String json = objectMapper.writeValueAsString(detail);
+            if (json.length() <= properties.getStepDetailMaxChars()) {
+                return detail;
+            }
+            return Map.of("_truncated", true, "_preview", json.substring(0, properties.getStepDetailMaxChars()));
+        } catch (Exception e) {
+            return detail;
+        }
     }
 }

@@ -304,11 +304,62 @@
       color: var(--dap-gray-500);
       margin-bottom: 2px;
     }
-    .doc-row {
+    .doc-block {
+      margin-bottom: 8px;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--dap-gray-700);
+    }
+    .doc-block > .lab {
+      color: var(--dap-gray-500);
+      margin-right: 6px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .doc-inline {
       display: flex;
+      align-items: baseline;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 14px;
+      gap: 2px 0;
+    }
+    a.doc-link {
+      color: var(--dap-primary);
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      background: none;
+      padding: 0;
+      font: inherit;
+    }
+    a.doc-link:hover { text-decoration: underline; }
+    a.doc-link[disabled],
+    span.doc-muted {
+      color: var(--dap-gray-500);
+      cursor: default;
+      text-decoration: none;
+      pointer-events: none;
+    }
+    .doc-sep {
+      color: var(--dap-gray-500);
+      margin: 0 6px;
+      user-select: none;
+    }
+    .ctx-one {
+      font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+      font-size: 12px;
+      color: var(--dap-gray-700);
+      cursor: default;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ctx-more {
+      color: var(--dap-primary);
+      font-family: inherit;
+      margin-left: 2px;
+      cursor: help;
+      border-bottom: 1px dashed var(--dap-primary);
     }
     .link-btn {
       border: 1px solid var(--dap-gray-200);
@@ -410,6 +461,110 @@
       line-height: 1.5;
     }
 
+    /* 产品经理二审：双侧评审结果 */
+    .pm2-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 10px 0 12px;
+    }
+    @media (max-width: 900px) {
+      .pm2-grid { grid-template-columns: 1fr; }
+    }
+    .pm2-card {
+      border: 1px solid var(--dap-gray-200);
+      border-radius: var(--dap-radius-md);
+      padding: 12px;
+      background: var(--dap-gray-0);
+    }
+    .pm2-card.pass { border-color: #86efac; background: #f7fdf9; }
+    .pm2-card.hold { border-color: #fcd34d; background: #fffbeb; }
+    .pm2-card.fail { border-color: #fca5a5; background: #fffafa; }
+    .pm2-card .pm2-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pm2-card .pm2-verdict {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 6px 0 8px;
+      line-height: 1.4;
+    }
+    .pm2-card .pm2-reason {
+      font-size: 12px;
+      color: var(--dap-gray-700);
+      line-height: 1.55;
+      margin-bottom: 10px;
+    }
+    .pm2-banner {
+      font-size: 12px;
+      line-height: 1.55;
+      padding: 10px 12px;
+      border-radius: var(--dap-radius-sm);
+      margin-bottom: 10px;
+    }
+    .pm2-banner.auto {
+      background: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+    .pm2-banner.hold {
+      background: #fffbeb;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+    .pm2-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 14px;
+      margin: 12px 0;
+      padding: 12px;
+      border: 1px solid var(--dap-gray-200);
+      border-radius: var(--dap-radius-md);
+      background: var(--dap-gray-50);
+    }
+    @media (max-width: 900px) {
+      .pm2-form { grid-template-columns: 1fr; }
+    }
+    .pm2-form label {
+      display: block;
+      font-size: 12px;
+      color: var(--dap-gray-500);
+      margin-bottom: 4px;
+    }
+    .pm2-form .req::after {
+      content: " *";
+      color: var(--dap-danger);
+    }
+    .pm2-form input,
+    .pm2-form select {
+      width: 100%;
+      border: 1px solid var(--dap-gray-200);
+      border-radius: var(--dap-radius-sm);
+      padding: 7px 10px;
+      font-family: inherit;
+      font-size: 13px;
+      background: var(--dap-gray-0);
+    }
+    .pm2-form input:focus,
+    .pm2-form select:focus {
+      outline: none;
+      border-color: var(--dap-primary);
+    }
+    .pm2-release-done {
+      font-size: 12px;
+      color: var(--dap-gray-700);
+      line-height: 1.55;
+      margin: 8px 0 12px;
+      padding: 8px 10px;
+      background: var(--dap-gray-50);
+      border-radius: var(--dap-radius-sm);
+    }
+
     .ai-actions {
       display: flex;
       gap: 8px;
@@ -439,6 +594,20 @@
     .tu-hd .name { font-weight: 600; font-size: 13px; flex: 1; }
     .tu-meta { font-size: 12px; color: var(--dap-gray-700); line-height: 1.55; margin-bottom: 8px; }
     .tu-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .tu-confirm {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--dap-gray-200);
+    }
+    .flow-note {
+      font-size: 12px;
+      color: var(--dap-gray-700);
+      line-height: 1.55;
+      padding: 8px 10px;
+      background: var(--dap-gray-50);
+      border-radius: var(--dap-radius-sm);
+      margin-bottom: 10px;
+    }
     .role-bar {
       display: flex;
       align-items: center;
@@ -574,23 +743,41 @@
     }
     .toast.show { opacity: 1; }
 
+    /* 演示导航：工作台底栏（文档流，不浮动遮挡中间按钮）；可收起 */
     .screens {
-      position: fixed;
-      bottom: 16px;
-      left: 16px;
-      z-index: 30;
+      flex-shrink: 0;
       display: flex;
+      flex-wrap: wrap;
+      align-items: center;
       gap: 8px;
       background: var(--dap-gray-0);
-      border: 1px solid var(--dap-gray-200);
-      border-radius: var(--dap-radius-md);
-      padding: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      border-top: 1px solid var(--dap-gray-200);
+      padding: 8px 12px;
+      margin: 0;
+    }
+    .screens.collapsed {
+      display: none;
     }
     .screens button.active {
       background: var(--dap-primary-light);
       border-color: var(--dap-primary);
       color: var(--dap-primary);
+    }
+    .screens .screens-label {
+      font-size: 12px;
+      color: var(--dap-gray-500);
+      margin-right: 4px;
+    }
+    .screens-show {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      z-index: 30;
+      display: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    .screens-show.visible {
+      display: inline-flex;
     }
 
     @media (max-width: 960px) {
@@ -605,32 +792,32 @@
   <!-- ========== 入口：需求详情 ========== -->
   <div class="entry" id="entry">
     <header class="app-top">
-      <div class="logo">DAP</div>
-      <nav class="nav">
-        <a href="#">首页</a>
-        <a class="active" href="#">工作台</a>
-        <a href="#">系统配置</a>
-      </nav>
+    <div class="logo">DAP</div>
+    <nav class="nav">
+      <a href="#">首页</a>
+      <a class="active" href="#">工作台</a>
+      <a href="#">系统配置</a>
+    </nav>
       <span class="hint">Mock · 点「自动化流水线」单开工作台</span>
-    </header>
+  </header>
     <div class="entry-body">
-      <aside class="pane">
-        <div class="pane-hd">需求列表</div>
-        <div class="pane-bd">
+    <aside class="pane">
+      <div class="pane-hd">需求列表</div>
+      <div class="pane-bd">
           <div class="req-item">
-            <div><span class="no">REQ-2026-001</span>登录体验优化 <span class="tag tag-warn">等待确认</span></div>
-            <div class="sub">流水线 · 架构师确认初审</div>
-          </div>
+          <div><span class="no">REQ-2026-001</span>登录体验优化 <span class="tag tag-warn">等待确认</span></div>
+          <div class="sub">流水线 · 架构师确认初审</div>
         </div>
-      </aside>
-      <main class="pane">
-        <div class="pane-hd">需求详情</div>
-        <div class="pane-bd">
-          <div class="req-hd">
-            <h1><span class="no" style="color:var(--dap-gray-500);font-weight:400">REQ-2026-001</span> 登录体验优化</h1>
-            <span class="tag tag-run">研发中</span>
-            <div class="actions">
-              <button type="button" class="btn btn-sm">创建任务</button>
+      </div>
+    </aside>
+    <main class="pane">
+      <div class="pane-hd">需求详情</div>
+      <div class="pane-bd">
+        <div class="req-hd">
+          <h1><span class="no" style="color:var(--dap-gray-500);font-weight:400">REQ-2026-001</span> 登录体验优化</h1>
+          <span class="tag tag-run">研发中</span>
+          <div class="actions">
+            <button type="button" class="btn btn-sm">创建任务</button>
               <button type="button" class="btn btn-sm btn-primary" onclick="openWorkbench()">自动化流水线</button>
             </div>
           </div>
@@ -646,8 +833,8 @@
           <div class="wiki-item" style="padding-left:16px">📄 PRD-v1.md</div>
         </div>
       </aside>
-    </div>
-  </div>
+          </div>
+        </div>
 
   <!-- ========== 单开：自动化工作台 ========== -->
   <div class="wb" id="workbench">
@@ -657,7 +844,7 @@
         <span class="code">REQ-2026-001</span>
         <span>登录体验优化</span>
         <span class="tag" id="instStatusTag">等待确认</span>
-      </div>
+        </div>
       <div class="metrics">
         <span>耗时 <b id="metricDur">12m</b></span>
         <span>Token <b id="metricTok">48.2k</b></span>
@@ -673,11 +860,13 @@
       <select id="viewerRole" onchange="setViewerRole(this.value)">
         <option value="PM">产品经理</option>
         <option value="ARCH">架构师</option>
-        <option value="BOTH" selected>同一人（产品+架构兼岗）</option>
-        <option value="DEV">研发（只读 AI 初审）</option>
+        <option value="UI">UI 设计</option>
+        <option value="DEV">研发</option>
+        <option value="QA">测试</option>
+        <option value="BOTH" selected>同一人（全岗演示）</option>
       </select>
       <span class="muted">本岗可触发自己的 AI 任务单元；其他岗可看不可触发</span>
-    </div>
+        </div>
 
     <div class="summary" id="summaryBar">
       <span>定义 <b>研发自动化</b> v1</span>
@@ -687,7 +876,9 @@
       <span>等待原因 <b id="sumWait">待执行双 Agent</b></span>
       <span class="sep">|</span>
       <span>本节点轮次 <b id="sumRound">1</b> / max 3</span>
-    </div>
+      <span class="sep">|</span>
+      <span>需求状态 <b id="sumReqStatus">评审中</b></span>
+          </div>
 
     <div class="wb-main" id="wbMain">
       <!-- 左：任务流程 -->
@@ -701,7 +892,7 @@
         <div class="col-hd">
           <span>节点基本信息</span>
           <span class="muted" id="detailHint"></span>
-        </div>
+            </div>
         <div class="col-bd" id="detail"></div>
       </section>
 
@@ -710,11 +901,27 @@
         <div class="col-hd">
           <span>AI 执行过程</span>
           <span class="muted" id="sessIdLabel"></span>
-        </div>
+                </div>
         <div class="sess-body" id="session"></div>
       </section>
-    </div>
-  </div>
+              </div>
+
+    <div class="screens" id="screensBar">
+      <span class="screens-label">演示导航</span>
+      <button type="button" class="btn btn-sm" onclick="closeWorkbench()">场景：需求详情</button>
+      <button type="button" class="btn btn-sm active" id="scrWb" onclick="openWorkbench()">场景：自动化工作台</button>
+      <button type="button" class="btn btn-sm" onclick="selectStep('ai_pre')">跳到 AI 初审</button>
+      <button type="button" class="btn btn-sm" onclick="selectStep('ai_pre');toast('在任务单元里：执行→展开确认→两侧齐后生成评审书')">演示 AI 初审闭环</button>
+      <button type="button" class="btn btn-sm" onclick="selectStep('pm_first')">看 PM 初审(自动过)</button>
+      <button type="button" class="btn btn-sm" onclick="demoPmSecond(true)">演示二审·双侧通过</button>
+      <button type="button" class="btn btn-sm" onclick="demoPmSecond(false)">演示二审·暂定可点通过</button>
+      <button type="button" class="btn btn-sm" onclick="demoGenPrd()">演示生成需求分析</button>
+      <span style="flex:1;min-width:8px"></span>
+      <button type="button" class="btn btn-sm" onclick="setScreensCollapsed(true)">收起</button>
+              </div>
+            </div>
+
+  <button type="button" class="btn btn-sm screens-show" id="screensShow" onclick="setScreensCollapsed(false)">展开演示导航</button>
 
   <div class="mask" id="mask" onclick="closeDrawer()"></div>
   <aside class="drawer" id="drawer">
@@ -722,21 +929,13 @@
       <div style="flex:1">
         <h2 id="drawerTitle">预览</h2>
         <div class="muted" id="drawerSub" style="margin-top:4px"></div>
-      </div>
+          </div>
       <button type="button" class="btn btn-sm" onclick="closeDrawer()">关闭</button>
-    </div>
+        </div>
     <div class="drawer-bd" id="drawerBody"></div>
   </aside>
 
   <div class="toast" id="toast"></div>
-
-  <div class="screens">
-    <button type="button" class="btn btn-sm" onclick="closeWorkbench()">场景：需求详情</button>
-    <button type="button" class="btn btn-sm active" id="scrWb" onclick="openWorkbench()">场景：自动化工作台</button>
-    <button type="button" class="btn btn-sm" onclick="selectStep('ai_pre')">跳到 AI 初审</button>
-    <button type="button" class="btn btn-sm" onclick="selectStep('confirm_prd')">跳到人闸确认</button>
-    <button type="button" class="btn btn-sm" onclick="selectStep('pm_first')">看 PM 初审(自动过)</button>
-  </div>
 
   <script>
     /**
@@ -744,58 +943,371 @@
      * 人闸：通过 → 下一步；未通过 → AI 整改 → 再回人闸
      * 取消：结束整条实例（与「未通过」分开）
      */
+    const WIKI_ROOT = "ACCT/REQ-2026-001";
+
     const DOCS = {
-      raw: { title: "输入 · 原始需求.md", body: "# 原始需求\n\n优化登录页体验：减少步骤、记住设备、错误提示可读。\n\n## 范围\n- Web 端登录\n- 不含 SSO 改造" },
-      prd: { title: "输出 · PRD-v1.md", body: "# 需求分析 PRD v1\n\n## FR-01 记住设备\n…\n\n## FR-03 并发登录提示\n（待补验收标准）" },
+      raw: {
+        title: "原始需求.md",
+        path: WIKI_ROOT + "/原始需求.md",
+        body: "# 原始需求\n\n优化登录页体验：减少步骤、记住设备、错误提示可读。\n\n## 范围\n- Web 端登录\n- 不含 SSO 改造"
+      },
+      prd_template: {
+        title: "需求设计PRD模板.md",
+        path: "templates/需求设计PRD模板.md",
+        body: "# 产品需求文档（PRD）· 模板\n\n（结构同仓库 doc/模板/需求设计PRD模板.md：文档信息、背景与目标、范围、用户与场景、功能需求…）"
+      },
+      arch_template: {
+        title: "架构设计文档模板.md",
+        path: "templates/架构设计文档模板.md",
+        body: "# 架构设计文档 · 模板\n\n（结构同 doc/模板/架构设计文档模板.md：约束、上下文、方案、接口与数据、风险…）"
+      },
+      detail_template: {
+        title: "详细设计文档模板.md",
+        path: "templates/详细设计文档模板.md",
+        body: "# 详细设计文档 · 模板\n\n（结构同 doc/模板/详细设计文档模板.md：模块、接口、数据、流程…）"
+      },
+      cases_template: {
+        title: "需求测试用例模板.md",
+        path: "templates/需求测试用例.md",
+        body: "# 需求测试用例文档 · 模板\n\n（结构同 doc/模板/需求测试用例.md：用例列表、前置、步骤、预期…）"
+      },
+      ui_spec: {
+        title: "UI设计规范.md",
+        path: "wiki/ACCT/UI设计规范.md",
+        body: "# UI 设计规范 · 账号中心\n\n产品级规范：栅格、色板、组件与交互约定。生成 UI 设计时必须对齐本规范。"
+      },
+      arch: {
+        title: "架构设计文档.md",
+        path: WIKI_ROOT + "/架构设计文档.md",
+        body: "# 架构设计文档 · REQ-2026-001\n\n## 方案概述\n…\n"
+      },
+      ui_design: {
+        title: "UI设计.html",
+        path: WIKI_ROOT + "/UI设计.html",
+        body: "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <title>UI 设计 · REQ-2026-001 · 登录体验</title>\n  <style>\n    body { font-family: system-ui, sans-serif; margin: 24px; color: #1f2329; }\n    .screen { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; max-width: 360px; }\n    .btn { background: #2b5aed; color: #fff; border: 0; padding: 8px 16px; border-radius: 4px; }\n  </style>\n</head>\n<body>\n  <h1>登录页 UI 设计（可交互示意）</h1>\n  <p>对齐产品《UI设计规范》与《产品需求说明书》；本文件为 HTML 设计交付物。</p>\n  <div class=\"screen\">\n    <h2>登录</h2>\n    <label>账号</label><input style=\"display:block;width:100%;margin:4px 0 12px\" />\n    <label>密码</label><input type=\"password\" style=\"display:block;width:100%;margin:4px 0 12px\" />\n    <label><input type=\"checkbox\" /> 记住此设备</label>\n    <p style=\"margin-top:12px\"><button class=\"btn\" type=\"button\">登录</button></p>\n  </div>\n</body>\n</html>"
+      },
+      pause_json_arch: {
+        title: "架构设计·确认-r1",
+        path: WIKI_ROOT + "/架构设计文档-确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"round\": 1,\n  \"findings\": [],\n  \"openQuestions\": [\n    { \"id\": \"A1\", \"question\": \"登录态是否必须复用现有统一会话服务？\" },\n    { \"id\": \"A2\", \"question\": \"记住设备凭证落库还是仅端侧？\" }\n  ]\n}\n\n← 有不确定则暂停；本岗确认后归档 Wiki，再写《架构设计文档》。"
+      },
+      pause_json_ui: {
+        title: "UI设计·确认-r1",
+        path: WIKI_ROOT + "/UI设计-确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"round\": 1,\n  \"findings\": [],\n  \"openQuestions\": [\n    { \"id\": \"U1\", \"question\": \"记住设备入口放在登录主按钮旁还是「更多」内？\" },\n    { \"id\": \"U2\", \"question\": \"并发登录提示用 Toast 还是对话框？\" }\n  ]\n}\n\n← 确认归档 Wiki 后，再输出 HTML《UI设计.html》。"
+      },
+      prompt_arch: {
+        title: "生成架构设计",
+        path: null,
+        body: "（PM/ARCH · GEN_ARCH）两段式：有不确定先输出问题 JSON → 人确认并归档 Wiki → 再按《架构设计文档模板》写架构设计文档。"
+      },
+      prompt_ui: {
+        title: "生成UI设计",
+        path: null,
+        body: "（UI · GEN_UI）两段式：有不确定先输出问题 JSON → 人确认并归档 Wiki → 再对齐《UI设计规范》输出 HTML 的 UI 设计文档（.html）。"
+      },
+      prompt_detail: {
+        title: "详细设计",
+        path: null,
+        body: "（DEV · GEN_DETAIL）两段式：有不确定先输出问题 JSON → 研发确认并归档 Wiki → 再按《详细设计文档模板》输出详细设计文档。"
+      },
+      prompt_cases: {
+        title: "测试用例",
+        path: null,
+        body: "（QA · GEN_CASES）两段式：有不确定先输出问题 JSON → 测试确认并归档 Wiki → 再按《需求测试用例模板》输出测试用例文档。"
+      },
+      pause_json_detail: {
+        title: "详细设计·确认-r1",
+        path: WIKI_ROOT + "/详细设计-确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"round\": 1,\n  \"openQuestions\": [\n    { \"id\": \"D1\", \"question\": \"会话校验接口是否复用现有 Auth 中间件？\" }\n  ]\n}\n\n← 确认归档后再写《详细设计文档》。"
+      },
+      pause_json_cases: {
+        title: "测试用例·确认-r1",
+        path: WIKI_ROOT + "/测试用例-确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"round\": 1,\n  \"openQuestions\": [\n    { \"id\": \"C1\", \"question\": \"记住设备场景是否纳入回归用例？\" }\n  ]\n}\n\n← 确认归档后再写《需求测试用例》。"
+      },
+      detail_doc: {
+        title: "详细设计文档.md",
+        path: WIKI_ROOT + "/详细设计文档.md",
+        body: "# 详细设计文档 · REQ-2026-001\n\n（按详细设计文档模板输出）\n"
+      },
+      cases_doc: {
+        title: "需求测试用例.md",
+        path: WIKI_ROOT + "/需求测试用例.md",
+        body: "# 需求测试用例 · REQ-2026-001\n\n（按需求测试用例模板输出）\n"
+      },
+      review_tpl: {
+        title: "评审模板.md",
+        path: "templates/评审模板.md",
+        body: "# 评审结果（AI生成）\n\n（确认 JSON 之后写正式评审书；无「疑似问题」节）\n\n## 已确认问题与处置\n…\n\n## 评审结论说明\n通过 / 有条件通过 / 不通过\n"
+      },
+      review_prd_dev: {
+        title: "PRD评审-研发.md",
+        path: WIKI_ROOT + "/PRD评审-研发.md",
+        body: "# 需求设计 PRD 评审（研发）\n\n| 结论 | 有条件通过 |\n"
+      },
+      review_prd_qa: {
+        title: "PRD评审-测试.md",
+        path: WIKI_ROOT + "/PRD评审-测试.md",
+        body: "# 需求设计 PRD 评审（测试）\n\n| 结论 | 通过 |\n"
+      },
+      review_arch_dev: {
+        title: "架构设计评审-研发.md",
+        path: WIKI_ROOT + "/架构设计评审-研发.md",
+        body: "# 架构设计评审（研发）\n"
+      },
+      review_arch_qa: {
+        title: "架构设计评审-测试.md",
+        path: WIKI_ROOT + "/架构设计评审-测试.md",
+        body: "# 架构设计评审（测试）\n"
+      },
+      review_ui_pm: {
+        title: "UI设计评审-产品.md",
+        path: WIKI_ROOT + "/UI设计评审-产品.md",
+        body: "# UI 设计评审（产品）\n"
+      },
+      review_ui_dev: {
+        title: "UI设计评审-研发.md",
+        path: WIKI_ROOT + "/UI设计评审-研发.md",
+        body: "# UI 设计评审（研发）\n"
+      },
+      review_ui_qa: {
+        title: "UI设计评审-测试.md",
+        path: WIKI_ROOT + "/UI设计评审-测试.md",
+        body: "# UI 设计评审（测试）\n"
+      },
+      review_result_json: {
+        title: "评审结果汇总.json",
+        path: WIKI_ROOT + "/评审结果汇总.json",
+        body: "{\n  \"phase\": \"need_value_confirm\",\n  \"items\": [\n    {\n      \"id\": \"M1\",\n      \"target\": \"PRD\",\n      \"title\": \"并发登录验收未写清\",\n      \"reviewers\": [\"研发\", \"测试\"],\n      \"valuable\": null\n    },\n    {\n      \"id\": \"M2\",\n      \"target\": \"ARCH\",\n      \"title\": \"会话服务复用边界不清\",\n      \"reviewers\": [\"研发\"],\n      \"valuable\": null\n    },\n    {\n      \"id\": \"M3\",\n      \"target\": \"UI\",\n      \"title\": \"记住设备入口位置未定\",\n      \"reviewers\": [\"产品\", \"测试\"],\n      \"valuable\": null\n    }\n  ]\n}"
+      },
+      review_merged: {
+        title: "合并评审.md",
+        path: WIKI_ROOT + "/合并评审.md",
+        body: "# 合并评审（总览）\n\n各轨合并见：合并评审-PRD / 架构 / UI。\n"
+      },
+      review_merged_prd: {
+        title: "合并评审-PRD.md",
+        path: WIKI_ROOT + "/合并评审-PRD.md",
+        body: "# 合并评审 · 需求设计PRD\n"
+      },
+      review_merged_arch: {
+        title: "合并评审-架构.md",
+        path: WIKI_ROOT + "/合并评审-架构.md",
+        body: "# 合并评审 · 架构设计\n"
+      },
+      review_merged_ui: {
+        title: "合并评审-UI.md",
+        path: WIKI_ROOT + "/合并评审-UI.md",
+        body: "# 合并评审 · UI设计\n"
+      },
+      review_merged_detail: {
+        title: "合并评审-详细设计.md",
+        path: WIKI_ROOT + "/合并评审-详细设计.md",
+        body: "# 合并评审 · 详细设计\n"
+      },
+      review_merged_cases: {
+        title: "合并评审-测试用例.md",
+        path: WIKI_ROOT + "/合并评审-测试用例.md",
+        body: "# 合并评审 · 测试用例\n"
+      },
+      review_detail_arch: {
+        title: "详细设计评审-架构.md",
+        path: WIKI_ROOT + "/详细设计评审-架构.md",
+        body: "# 详细设计评审（架构）\n"
+      },
+      review_detail_pm: {
+        title: "详细设计评审-产品.md",
+        path: WIKI_ROOT + "/详细设计评审-产品.md",
+        body: "# 详细设计评审（产品）\n"
+      },
+      review_detail_qa: {
+        title: "详细设计评审-测试.md",
+        path: WIKI_ROOT + "/详细设计评审-测试.md",
+        body: "# 详细设计评审（测试）\n"
+      },
+      review_case_arch: {
+        title: "测试用例评审-架构.md",
+        path: WIKI_ROOT + "/测试用例评审-架构.md",
+        body: "# 测试用例评审（架构）\n"
+      },
+      review_case_pm: {
+        title: "测试用例评审-产品.md",
+        path: WIKI_ROOT + "/测试用例评审-产品.md",
+        body: "# 测试用例评审（产品）\n"
+      },
+      review_case_dev: {
+        title: "测试用例评审-研发.md",
+        path: WIKI_ROOT + "/测试用例评审-研发.md",
+        body: "# 测试用例评审（研发）\n"
+      },
+      pause_json_rev: {
+        title: "评审确认-r1",
+        path: WIKI_ROOT + "/评审确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"openQuestions\": [\n    { \"id\": \"R1\", \"question\": \"验收标准是否覆盖并发登录？\" }\n  ]\n}\n\n← 评审 Agent 有不确定则暂停；确认归档后再写评审书。"
+      },
+      prompt_review_prd: {
+        title: "需求设计PRD评审",
+        path: null,
+        body: "两段式评审：对照 PRD + 评审模板；有不确定先问题 JSON → 本岗确认并归档 Wiki → 再输出评审书。"
+      },
+      prompt_review_arch: {
+        title: "架构设计评审",
+        path: null,
+        body: "两段式评审：对照架构设计文档（及 PRD）+ 评审模板；确认归档后再写评审书。"
+      },
+      prompt_review_ui: {
+        title: "UI设计评审",
+        path: null,
+        body: "两段式评审：对照 UI设计.html（及 PRD）+ 评审模板；确认归档后再写评审书。"
+      },
+      prompt_review_detail: {
+        title: "详细设计评审",
+        path: null,
+        body: "两段式评审：对照详细设计文档 + 评审模板；有不确定先问题 JSON → 本岗确认归档 → 再输出评审书。提示词在「提示词管理」按岗位+REVIEW_DETAIL_* 维护。"
+      },
+      prompt_review_cases: {
+        title: "测试用例评审",
+        path: null,
+        body: "两段式评审：对照需求测试用例 + 评审模板；有不确定先问题 JSON → 本岗确认归档 → 再输出评审书。提示词在「提示词管理」按岗位+REVIEW_CASE_* 维护。"
+      },
+      prompt_coding: {
+        title: "开发编码",
+        path: null,
+        body: "（DEV · GEN_CODING）依据详细设计在业务仓库实现；编码阶段同步编写可自动化测试用例；有不确定先问题 JSON → 确认归档 → 改代码并输出《编码完成报告》。提示词：DEV+GEN_CODING。"
+      },
+      pause_json_coding: {
+        title: "编码·确认-r1",
+        path: WIKI_ROOT + "/编码-确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"openQuestions\": [\n    { \"id\": \"K1\", \"question\": \"记住设备凭证落 Redis 还是 DB？\" }\n  ]\n}\n\n← 确认归档后再改代码（含自动化用例）并输出《编码完成报告》。"
+      },
+      coding_out: {
+        title: "编码完成报告.md",
+        path: WIKI_ROOT + "/编码完成报告.md",
+        body: "# 编码完成报告 · REQ-2026-001\n\n## 依据\n《详细设计文档》（现行版）\n\n## 完成说明\n已按详设完成实现；同步补充了可自动化测试用例（演示）。\n\n## 变更摘要\n- 登录记住设备\n- 错误提示可读性\n- 自动化用例（登录/记住设备）\n"
+      },
+      prompt_int_test: {
+        title: "集成测试",
+        path: null,
+        body: "（QA · GEN_INT_TEST）基于测试仓库 +《需求测试用例》可自动化子集：补齐自动化用例编码，按用例把本需求实现再覆盖跑一遍；通过后输出《集成测试报告》。提示词：QA+GEN_INT_TEST。"
+      },
+      pause_json_int_test: {
+        title: "集成测试·确认-r1",
+        path: WIKI_ROOT + "/集成测试-确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"openQuestions\": [\n    { \"id\": \"I1\", \"question\": \"记住设备用例是否纳入本次集成回归？\" }\n  ]\n}\n\n← 确认归档后再跑集成并输出《集成测试报告》。"
+      },
+      int_test_report: {
+        title: "集成测试报告.md",
+        path: WIKI_ROOT + "/集成测试报告.md",
+        body: "# 集成测试报告 · REQ-2026-001\n\n## 依据\n- 测试仓库自动化代码\n- 《需求测试用例》可自动化子集\n\n## 结论\n**通过**（演示）\n\n## 覆盖摘要\n| 用例 | 结果 |\n|---|---|\n| 登录主路径 | 通过 |\n| 记住设备 | 通过 |\n"
+      },
+      prd: {
+        title: "产品需求说明书.md",
+        path: WIKI_ROOT + "/产品需求说明书.md",
+        body: "# 产品需求说明书 · 登录体验优化\n\n| 需求编号 | REQ-2026-001 |\n| 版本 | V1 |\n\n## 1. 背景与目标\n…\n\n## FR-01 记住设备\n…\n\n## FR-03 并发登录提示\n（已按确认补验收标准）"
+      },
+      pause_json_prd: {
+        title: "生成PRD·确认-r1",
+        path: WIKI_ROOT + "/产品需求说明书-确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"round\": 1,\n  \"findings\": [],\n  \"openQuestions\": [\n    { \"id\": \"Q1\", \"question\": \"记住设备的有效期是否默认 30 天？\", \"hint\": \"对照基线安全策略\" },\n    { \"id\": \"Q2\", \"question\": \"并发登录是互踢还是仅提示？\" }\n  ]\n}\n\n← 有不确定项则暂停；确认且 phase=ok 后再写《产品需求说明书》。"
+      },
+      pause_json_biz: {
+        title: "业务确认-r1.json",
+        path: WIKI_ROOT + "/原始需求业务评估-确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"findings\": [\n    {\n      \"id\": \"BR1\",\n      \"type\": \"confirmed\",\n      \"title\": \"价值假设不清\",\n      \"suggestions\": [\"①小范围验证\", \"②暂缓\"],\n      \"recommend\": \"①\"\n    }\n  ],\n  \"openQuestions\": [\n    { \"id\": \"B1\", \"question\": \"客群是否 B 端？\", \"hint\": \"与需求方确认\" }\n  ]\n}\n\n← 有 findings/openQuestions 就暂停等人；没有则可直接出评审书。\n模板 MD 里不需要「疑似问题」栏目，靠提示词约定先输出本 JSON。"
+      },
+      pause_json_tech: {
+        title: "技术确认-r1.json",
+        path: WIKI_ROOT + "/原始需求技术评估-确认-r1.md",
+        body: "{\n  \"phase\": \"need_human_confirm\",\n  \"findings\": [\n    {\n      \"id\": \"TR1\",\n      \"type\": \"confirmed\",\n      \"title\": \"缓存方案未定\",\n      \"suggestions\": [\"①TTL\", \"②主动失效\"],\n      \"recommend\": \"①\"\n    }\n  ],\n  \"openQuestions\": [\n    { \"id\": \"T1\", \"question\": \"能否复用现有批量能力？\" }\n  ]\n}"
+      },
       review_biz: {
-        title: "输出 · 原始需求业务评估.md",
-        body: "# 原始需求业务评估报告\n\n## 五、业务风险\n| BR1 | … |\n\n## 六、疑似问题\n| B1 | … |"
+        title: "业务评估评审书.md",
+        path: WIKI_ROOT + "/原始需求业务评估.md",
+        body: "# 原始需求业务评估报告\n\n| 项 | 内容 |\n|---|---|\n| 需求编号 | REQ-2026-001 |\n| AI业务评估结论 | 建议做 |\n\n## 五、业务侧结论\n\n| 项 | 内容 |\n|---|---|\n| 业务侧结论 | 建议做 |\n| 理由 | 痛点明确；与路线图对齐；前置条件已确认 |\n| 前置条件 | 客群确认为 B 端；小范围验证后扩 |\n"
       },
       review_tech: {
-        title: "输出 · 原始需求技术评估.md",
-        body: "# 原始需求技术评估报告\n\n## 技术风险\n| TR1 | … |\n\n## 疑似问题\n| T1 | … |"
+        title: "技术评估评审书.md",
+        path: WIKI_ROOT + "/原始需求技术评估.md",
+        body: "# 原始需求技术评估报告\n\n| 项 | 内容 |\n|---|---|\n| 需求编号 | REQ-2026-001 |\n| AI技术评估结论 | 可做 |\n\n## 四、技术侧结论\n\n| 项 | 内容 |\n|---|---|\n| 技术侧结论 | 可做 |\n| 理由 | 现有架构可支撑；工作量中等 |\n| 前置条件 | 缓存采用 TTL；复用现有批量能力 |\n"
+      },
+      review_summary: {
+        title: "初审评审书.md",
+        path: WIKI_ROOT + "/原始需求初审评审书.md",
+        body: "# 原始需求初审评审书\n\n汇总业务/技术两份已确认后的评审书。\n"
+      },
+      confirm_json: {
+        title: "人确认结果（归档 Wiki）",
+        path: WIKI_ROOT + "/原始需求业务评估-确认-r1.md",
+        body: "# 确认归档 r1\n\n## AI 本轮问题\n（见暂停 JSON）\n\n## 产品经理/本岗确认\n```json\n{\n  \"unit\": \"pre_biz\",\n  \"findings\": [\n    { \"id\": \"BR1\", \"decision\": \"agree\", \"adopt\": \"①\" }\n  ],\n  \"openQuestions\": [\n    { \"id\": \"B1\", \"answer\": \"确认为 B 端\" }\n  ]\n}\n```\n\n← 问题 + 人确认一并写入 Wiki，再回灌 Agent。"
       },
       review: {
-        title: "输出 · 评审书-架构师.md",
+        title: "评审书-架构师.md",
+        path: WIKI_ROOT + "/评审书-架构师.md",
         body: "# 评审结果（AI生成）\n\n## 问题清单\n| 2 | 未说明缓存失效策略 | P1 | … | ① |\n\n## 疑似问题\n| A1 | AI假设「用户手机号全局唯一」 | … |"
       },
       prompt_gen: {
-        title: "首次提示词 · 生成 PRD",
-        body: "你是「AI 产品经理」。请基于《原始需求.md》撰写需求分析 PRD。"
+        title: "生成需求分析",
+        path: null,
+        body: "（租户配置 · 提示词管理 · PM · GEN_PRD）\n\n【输入】原始需求 + 需求设计PRD模板\n【上下文】wiki/{产品}/基线 、 {产品}/{需求编号}\n【两段式】有不确定 → 先输出问题列表 JSON 并暂停；确认且无问题后 → 再输出《产品需求说明书》。"
       },
       prompt_biz: {
-        title: "首次提示词 · 业务评审（AI 产品经理）",
-        body: "你是「AI 产品经理」。请按《原始需求评估模板-业务》输出业务风险与疑似问题。\n\n【输入】原始需求.md"
+        title: "首次提示词 · 业务评审（两段式）",
+        path: null,
+        body: "你是「AI 产品经理」。\n\n【阶段1】只输出确认 JSON（findings + openQuestions）。若有任一项需人确认，phase=need_human_confirm 并停止，禁止写评审书。\n【阶段2】收到人确认 JSON 后，再按《原始需求评估模板-业务》写评审书正文；模板中不要「疑似问题」栏目（不确定项已在阶段1 JSON 处理完）。\n\n【输入】原始需求.md"
       },
       prompt_tech: {
-        title: "首次提示词 · 技术评审（AI 架构师）",
-        body: "你是「AI 架构师」。请按《原始需求评估模板-技术》输出技术风险与疑似问题。\n\n【输入】原始需求.md"
+        title: "首次提示词 · 技术评审（两段式）",
+        path: null,
+        body: "你是「AI 架构师」。\n\n【阶段1】只输出确认 JSON；需人确认则暂停。\n【阶段2】人确认后按《原始需求评估模板-技术》写评审书（无「疑似问题」节）。\n\n【输入】原始需求.md"
       },
       prompt_review: {
         title: "首次提示词 · AI 架构评 PRD",
+        path: null,
         body: "你是「AI 架构师」。请按《评审模板》输出问题清单 + 疑似问题。\n\n【输入】PRD-v1.md"
       },
       prompt_revise: {
         title: "首次提示词 · 整改 PRD",
+        path: null,
         body: "你是「AI 产品经理」。请根据人类确认结果修订文档并升版。"
       }
     };
 
     const SESSIONS = {
       gen_prd: [
-        { role: "user", text: "（kickoff）请按模板生成 PRD…" },
-        { role: "tool", text: "read_wiki → 原始需求.md" },
-        { role: "assistant", text: "已生成 PRD-v1，写入 Wiki。" }
+        { role: "user", text: "（kickoff）先判断是否有不确定项；有则只输出问题列表 JSON，勿写产品需求说明书。" },
+        { role: "tool", text: "read → 原始需求.md / 需求设计PRD模板.md；list → ACCT/基线、ACCT/REQ-2026-001" },
+        { role: "assistant", text: "{\"phase\":\"need_human_confirm\",\"openQuestions\":[…]}" },
+        { role: "user", text: "（人确认已回）无新问题，请按模板写《产品需求说明书》。" },
+        { role: "assistant", text: "已写入 产品需求说明书.md。" }
+      ],
+      gen_arch: [
+        { role: "user", text: "（kickoff）有不确定先输出问题 JSON，勿写架构设计文档。" },
+        { role: "assistant", text: "{\"phase\":\"need_human_confirm\",\"openQuestions\":[…]}" },
+        { role: "user", text: "（确认已归档 Wiki）请按模板写《架构设计文档》。" },
+        { role: "assistant", text: "已写入 架构设计文档.md。" }
+      ],
+      gen_ui: [
+        { role: "user", text: "（kickoff）有不确定先输出问题 JSON，勿写 UI设计.html。" },
+        { role: "assistant", text: "{\"phase\":\"need_human_confirm\",\"openQuestions\":[…]}" },
+        { role: "user", text: "（确认已归档 Wiki）请对齐规范输出 HTML《UI设计.html》。" },
+        { role: "assistant", text: "已写入 UI设计.html。" }
       ],
       pre_biz: [
-        { role: "user", text: "（kickoff）业务评估…" },
-        { role: "tool", text: "read_wiki → 原始需求.md" },
-        { role: "assistant", text: "已输出业务风险 + 疑似问题。" }
+        { role: "user", text: "（kickoff）先只输出确认 JSON；有不确定项则暂停，勿写评审书正文。" },
+        { role: "assistant", text: "{\"phase\":\"need_human_confirm\",\"findings\":[…],\"openQuestions\":[…]}" },
+        { role: "user", text: "（人确认 JSON 已回）请按业务评估模板写评审书，不要再列疑似问题节。" },
+        { role: "assistant", text: "已按模板写出《业务评估评审书》。" }
       ],
       pre_tech: [
-        { role: "user", text: "（kickoff）技术评估…" },
-        { role: "tool", text: "read_wiki → 原始需求.md" },
-        { role: "assistant", text: "已输出技术风险 + 疑似问题。" }
+        { role: "user", text: "（kickoff）先只输出确认 JSON；有不确定项则暂停。" },
+        { role: "assistant", text: "{\"phase\":\"need_human_confirm\",…}" },
+        { role: "user", text: "（人确认 JSON 已回）请按技术评估模板写评审书。" },
+        { role: "assistant", text: "已按模板写出《技术评估评审书》。" }
+      ],
+      pre_summary: [
+        { role: "user", text: "汇总两侧评审书 → 初审评审书" },
+        { role: "assistant", text: "已生成《初审评审书》。" }
       ],
       review_prd: [
         { role: "user", text: "（kickoff）请评审 PRD…" },
@@ -815,42 +1327,470 @@
     let selectedId = null;
     let instanceStatus = "RUNNING";
     let reviseRound = 1;
+    /** 需求业务状态（演示）：REVIEWING | PLANNED | IN_DEV | … */
+    let reqBizStatus = "REVIEWING";
+
+    let expandedConfirm = null; // taskId
+    let summaryStatus = "PENDING"; // PENDING | RUNNING | SUCCEEDED
+    /**
+     * 按轨合并确认（非独立节点）：prd_review / arch_review / ui_review 各轨 Agent 齐后各自触发。
+     * status: IDLE | WAITING_HUMAN | SUCCEEDED
+     */
+    let reviewMergeByTrack = {};
+
+    const TRACK_FLOW = {
+      prd_review: {
+        phase: "design", reviseNodeId: "doc_revise",
+        label: "需求设计PRD",
+        target: "PRD",
+        mergedDocKey: "review_merged_prd",
+        mergeItems: [
+          { id: "P1", target: "PRD", title: "并发登录验收未写清", reviewers: ["研发", "测试"], valuable: null }
+        ],
+        revise: {
+          id: "rev_prd", name: "修订需求分析", ownerRole: "PM", agent: "AI 产品修订",
+          template: "本轨合并评审 + PRD",
+          inputs: ["review_merged_prd", "prd", "review_prd_dev", "review_prd_qa"],
+          contexts: null,
+          promptKey: "prompt_revise", sessionKey: "rev_prd",
+          outputKey: "prd", writeLabel: "产品需求说明书", target: "PRD"
+        }
+      },
+      arch_review: {
+        phase: "design", reviseNodeId: "doc_revise",
+        label: "架构设计",
+        target: "ARCH",
+        mergedDocKey: "review_merged_arch",
+        mergeItems: [
+          { id: "A1", target: "ARCH", title: "会话服务复用边界不清", reviewers: ["研发"], valuable: null }
+        ],
+        revise: {
+          id: "rev_arch", name: "修订架构设计", ownerRole: "ARCH", agent: "AI 架构修订",
+          template: "本轨合并评审 + 架构文档",
+          inputs: ["review_merged_arch", "arch", "review_arch_dev", "review_arch_qa"],
+          contexts: ["wiki/ACCT/架构设计"],
+          promptKey: "prompt_revise", sessionKey: "rev_arch",
+          outputKey: "arch", writeLabel: "架构设计文档", target: "ARCH"
+        }
+      },
+      ui_review: {
+        phase: "design", reviseNodeId: "doc_revise",
+        label: "UI设计",
+        target: "UI",
+        mergedDocKey: "review_merged_ui",
+        mergeItems: [
+          { id: "U1", target: "UI", title: "记住设备入口位置未定", reviewers: ["产品", "测试"], valuable: null }
+        ],
+        revise: {
+          id: "rev_ui", name: "修订 UI 设计", ownerRole: "UI", agent: "AI UI修订",
+          template: "本轨合并评审 + UI设计",
+          inputs: ["review_merged_ui", "ui_design", "review_ui_pm", "review_ui_dev", "review_ui_qa"],
+          contexts: ["wiki/ACCT/基线/UI设计"],
+          promptKey: "prompt_revise", sessionKey: "rev_ui",
+          outputKey: "ui_design", writeLabel: "UI设计.html", target: "UI"
+        }
+      },
+      detail_review: {
+        phase: "downstream", reviseNodeId: "doc_revise_dt",
+        label: "详细设计",
+        target: "DETAIL",
+        mergedDocKey: "review_merged_detail",
+        mergeItems: [
+          { id: "D1", target: "DETAIL", title: "接口幂等与错误码未对齐", reviewers: ["架构", "测试"], valuable: null }
+        ],
+        revise: {
+          id: "rev_detail", name: "修订详细设计", ownerRole: "DEV", agent: "AI 详设修订",
+          template: "本轨合并评审 + 详细设计",
+          inputs: ["review_merged_detail", "detail_doc"],
+          contexts: [WIKI_ROOT],
+          promptKey: "prompt_revise", sessionKey: "rev_detail",
+          outputKey: "detail_doc", writeLabel: "详细设计文档", target: "DETAIL"
+        }
+      },
+      cases_review: {
+        phase: "downstream", reviseNodeId: "doc_revise_dt",
+        label: "测试用例",
+        target: "CASES",
+        mergedDocKey: "review_merged_cases",
+        mergeItems: [
+          { id: "C1", target: "CASES", title: "记住设备场景覆盖不足", reviewers: ["产品", "研发"], valuable: null }
+        ],
+        revise: {
+          id: "rev_cases", name: "修订测试用例", ownerRole: "QA", agent: "AI 用例修订",
+          template: "本轨合并评审 + 测试用例",
+          inputs: ["review_merged_cases", "cases_doc"],
+          contexts: [WIKI_ROOT],
+          promptKey: "prompt_revise", sessionKey: "rev_cases",
+          outputKey: "cases_doc", writeLabel: "需求测试用例", target: "CASES"
+        }
+      }
+    };
+
+    function trackIdsByPhase(phase) {
+      return Object.keys(TRACK_FLOW).filter((id) => TRACK_FLOW[id].phase === phase);
+    }
+
+    function resetTrackMerges() {
+      reviewMergeByTrack = {};
+      Object.keys(TRACK_FLOW).forEach((id) => {
+        reviewMergeByTrack[id] = { status: "IDLE", mergeItems: null, mergedDocKey: null };
+      });
+    }
+    resetTrackMerges();
+
+    /** 当前需求所属产品的版本号（从产品配置选，非手填） */
+    const PRODUCT_VERSIONS = [
+      { id: "v-2026-10", version: "2026.10", planReleaseAt: "2026-10-31T18:00", status: "规划中" },
+      { id: "v-2026-11", version: "2026.11", planReleaseAt: "2026-11-15T18:00", status: "规划中" },
+      { id: "v-2026-12", version: "2026.12", planReleaseAt: "2026-12-20T18:00", status: "规划中" }
+    ];
 
     function seedSteps() {
       steps = [
         {
           id: "pm_first", name: "产品经理初审", kind: "human", status: "SUCCEEDED", round: 1,
-          role: "PM", inputs: ["raw"], outputs: [], gate: true, autoPass: true
+          role: "PM", inputs: ["raw"], outputs: [], contexts: [], gate: true, autoPass: true
         },
         {
           id: "ai_pre", name: "AI 初审", kind: "ai_review", status: "WAITING_TRIGGER", round: 1,
           role: "PM+ARCH", inputs: ["raw"], outputs: [],
+          contexts: [
+            WIKI_ROOT + "/原始需求业务评估-确认-r1.md",
+            WIKI_ROOT + "/原始需求技术评估-确认-r1.md"
+          ],
           tasks: [
             {
               id: "pre_biz", name: "业务评审", ownerRole: "PM", agent: "AI 产品经理",
-              template: "原始需求评估模板-业务", status: "WAITING_TRIGGER",
-              promptKey: "prompt_biz", sessionKey: "pre_biz", outputKey: "review_biz"
+              template: "原始需求评估模板-业务（无「疑似问题」节）", status: "WAITING_TRIGGER",
+              promptKey: "prompt_biz", sessionKey: "pre_biz",
+              pauseJsonKey: "pause_json_biz", outputKey: "review_biz",
+              confirmExpanded: false, confirmJson: null, docWritten: false,
+              verdict: null, verdictPass: null, verdictReason: ""
             },
             {
               id: "pre_tech", name: "技术评审", ownerRole: "ARCH", agent: "AI 架构师",
-              template: "原始需求评估模板-技术", status: "WAITING_TRIGGER",
-              promptKey: "prompt_tech", sessionKey: "pre_tech", outputKey: "review_tech"
+              template: "原始需求评估模板-技术（无「疑似问题」节）", status: "WAITING_TRIGGER",
+              promptKey: "prompt_tech", sessionKey: "pre_tech",
+              pauseJsonKey: "pause_json_tech", outputKey: "review_tech",
+              confirmExpanded: false, confirmJson: null, docWritten: false,
+              verdict: null, verdictPass: null, verdictReason: ""
             }
           ]
         },
-        { id: "pm_confirm", name: "初审有效确认", kind: "human", status: "PENDING", round: 1, role: "PM+ARCH", inputs: ["review_biz", "review_tech"], outputs: [], gate: true },
-        { id: "pm_second", name: "产品经理二审", kind: "human", status: "PENDING", round: 1, role: "PM", inputs: ["raw"], outputs: [], gate: true },
-        { id: "gen_prd", name: "生成需求分析", kind: "ai_gen", status: "PENDING", round: 1, role: "PM", inputs: ["raw"], outputs: ["prd"], promptKey: "prompt_gen", sessionKey: "gen_prd" },
-        { id: "review_prd", name: "AI 架构评 PRD", kind: "ai_review", status: "PENDING", round: 1, role: "ARCH", inputs: ["prd"], outputs: ["review"], promptKey: "prompt_review", sessionKey: "review_prd" },
-        { id: "confirm_prd", name: "架构师确认初审", kind: "human", status: "PENDING", round: 1, role: "ARCH", inputs: ["prd", "review"], outputs: [], gate: true },
-        { id: "gen_arch", name: "生成架构设计", kind: "ai_gen", status: "PENDING", round: 1, role: "ARCH", inputs: ["prd"], outputs: [], promptKey: "prompt_gen" },
-        { id: "gen_ui", name: "生成 UI 规范", kind: "ai_gen", status: "PENDING", round: 1, role: "UI", inputs: ["prd"], outputs: [], promptKey: "prompt_gen" },
-        { id: "done", name: "流水线结束", kind: "system", status: "PENDING", round: 1, role: "—", inputs: [], outputs: [] }
+        {
+          id: "pm_second", name: "产品经理二审", kind: "human", status: "PENDING", round: 1,
+          role: "PM", inputs: ["review_biz", "review_tech"], outputs: [],
+          contexts: [
+            WIKI_ROOT + "/原始需求.md",
+            WIKI_ROOT + "/原始需求业务评估-确认-r1.md",
+            WIKI_ROOT + "/原始需求技术评估-确认-r1.md"
+          ],
+          gate: true, gateKind: "pm_second",
+          decision: null, // ready_pass | manual_pass | null
+          passMode: null, // park | continue | null
+          holdReason: null,
+          releaseVersionId: "",
+          releaseVersion: "",
+          releaseAt: ""
+        },
+        {
+          id: "gen_prd", name: "生成需求分析", kind: "ai_gen", status: "PENDING", round: 1, role: "PM",
+          inputs: ["raw", "prd_template"], outputs: [],
+          contexts: ["wiki/ACCT/基线", "ACCT/REQ-2026-001"],
+          promptKey: "prompt_gen", sessionKey: "gen_prd",
+          flowKind: "gen_prd",
+          branchChoice: null, // { needArch, needUi } after PRD written
+          tasks: [
+            {
+              id: "prd_write", name: "撰写产品需求说明书", ownerRole: "PM", agent: "AI 产品经理",
+              template: "需求设计PRD模板 → 产品需求说明书", status: "WAITING_TRIGGER",
+              promptKey: "prompt_gen", sessionKey: "gen_prd",
+              pauseJsonKey: "pause_json_prd", outputKey: "prd",
+              confirmExpanded: false, confirmJson: null, docWritten: false,
+              writeLabel: "产品需求说明书"
+            }
+          ]
+        },
+        {
+          id: "gen_arch", name: "生成架构设计", kind: "ai_gen", status: "PENDING", round: 1, role: "ARCH",
+          inputs: ["prd", "arch_template"], outputs: [],
+          contexts: ["wiki/ACCT/架构设计"],
+          promptKey: "prompt_arch", optional: true, flowKind: "gen_design",
+          tasks: [
+            {
+              id: "arch_write", name: "撰写架构设计文档", ownerRole: "ARCH", agent: "AI 架构师",
+              template: "架构设计文档模板 → 架构设计文档", status: "WAITING_TRIGGER",
+              promptKey: "prompt_arch", sessionKey: "gen_arch",
+              pauseJsonKey: "pause_json_arch", outputKey: "arch",
+              confirmExpanded: false, confirmJson: null, docWritten: false,
+              writeLabel: "架构设计文档"
+            }
+          ]
+        },
+        {
+          id: "gen_ui", name: "生成 UI 设计", kind: "ai_gen", status: "PENDING", round: 1, role: "UI",
+          inputs: ["prd", "ui_spec"], outputs: [],
+          contexts: ["wiki/ACCT/基线/UI设计", "wiki/ACCT/基线/prd"],
+          promptKey: "prompt_ui", optional: true, flowKind: "gen_design",
+          tasks: [
+            {
+              id: "ui_write", name: "撰写UI设计.html", ownerRole: "UI", agent: "AI 设计师",
+              template: "UI设计规范 → UI设计.html", status: "WAITING_TRIGGER",
+              promptKey: "prompt_ui", sessionKey: "gen_ui",
+              pauseJsonKey: "pause_json_ui", outputKey: "ui_design",
+              confirmExpanded: false, confirmJson: null, docWritten: false,
+              writeLabel: "UI设计.html"
+            }
+          ]
+        },
+        {
+          id: "prd_review", name: "需求设计PRD评审", kind: "ai_review", status: "PENDING", round: 1,
+          role: "DEV+QA", flowKind: "multi_review",
+          inputs: ["prd", "review_tpl"], outputs: [],
+          contexts: ["wiki/ACCT/基线"],
+          tasks: [
+            {
+              id: "prd_rev_dev", name: "研发评审", ownerRole: "DEV", agent: "AI 研发评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["prd", "review_tpl"], contexts: ["wiki/ACCT/基线"],
+              repoPath: "git@example.com:acct/web-login.git",
+              promptKey: "prompt_review_prd", sessionKey: "prd_rev_dev",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_prd_dev",
+              writeLabel: "PRD评审-研发"
+            },
+            {
+              id: "prd_rev_qa", name: "测试评审", ownerRole: "QA", agent: "AI 测试评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["prd", "review_tpl"], contexts: ["wiki/ACCT/基线"],
+              promptKey: "prompt_review_prd", sessionKey: "prd_rev_qa",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_prd_qa",
+              writeLabel: "PRD评审-测试"
+            }
+          ]
+        },
+        {
+          id: "arch_review", name: "架构设计评审", kind: "ai_review", status: "PENDING", round: 1,
+          role: "DEV+QA", flowKind: "multi_review", optional: true,
+          inputs: ["prd", "arch", "review_tpl"], outputs: [],
+          contexts: ["wiki/ACCT/基线"],
+          tasks: [
+            {
+              id: "arch_rev_dev", name: "研发评审", ownerRole: "DEV", agent: "AI 研发评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["prd", "arch", "review_tpl"], contexts: ["wiki/ACCT/基线"],
+              repoPath: "git@example.com:acct/web-login.git",
+              promptKey: "prompt_review_arch", sessionKey: "arch_rev_dev",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_arch_dev",
+              writeLabel: "架构设计评审-研发"
+            },
+            {
+              id: "arch_rev_qa", name: "测试评审", ownerRole: "QA", agent: "AI 测试评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["prd", "arch", "review_tpl"], contexts: ["wiki/ACCT/基线"],
+              promptKey: "prompt_review_arch", sessionKey: "arch_rev_qa",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_arch_qa",
+              writeLabel: "架构设计评审-测试"
+            }
+          ]
+        },
+        {
+          id: "ui_review", name: "UI设计评审", kind: "ai_review", status: "PENDING", round: 1,
+          role: "PM+DEV+QA", flowKind: "multi_review", optional: true,
+          inputs: ["prd", "ui_design", "review_tpl"], outputs: [],
+          contexts: ["wiki/ACCT/基线"],
+          tasks: [
+            {
+              id: "ui_rev_pm", name: "产品评审", ownerRole: "PM", agent: "AI 产品评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["prd", "ui_design", "review_tpl"], contexts: ["wiki/ACCT/基线/产品"],
+              promptKey: "prompt_review_ui", sessionKey: "ui_rev_pm",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_ui_pm",
+              writeLabel: "UI设计评审-产品"
+            },
+            {
+              id: "ui_rev_dev", name: "研发评审", ownerRole: "DEV", agent: "AI 研发评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["prd", "ui_design", "review_tpl"], contexts: ["wiki/ACCT/基线"],
+              repoPath: "git@example.com:acct/web-login.git",
+              promptKey: "prompt_review_ui", sessionKey: "ui_rev_dev",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_ui_dev",
+              writeLabel: "UI设计评审-研发"
+            },
+            {
+              id: "ui_rev_qa", name: "测试评审", ownerRole: "QA", agent: "AI 测试评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["prd", "ui_design", "review_tpl"], contexts: ["wiki/ACCT/基线"],
+              promptKey: "prompt_review_ui", sessionKey: "ui_rev_qa",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_ui_qa",
+              writeLabel: "UI设计评审-测试"
+            }
+          ]
+        },
+        {
+          id: "doc_revise", name: "文档修订", kind: "ai_revise", status: "PENDING", round: 1,
+          role: "PM+ARCH+UI", flowKind: "doc_revise",
+          inputs: ["review_merged", "prd", "arch", "ui_design"], outputs: [],
+          contexts: [WIKI_ROOT],
+          tasks: []
+        },
+        {
+          id: "gen_detail", name: "详细设计", kind: "ai_gen", status: "PENDING", round: 1, role: "DEV",
+          inputs: ["detail_template", "prd", "arch"], outputs: [],
+          contexts: [WIKI_ROOT],
+          promptKey: "prompt_detail", optional: false, flowKind: "gen_downstream",
+          tasks: [
+            {
+              id: "detail_write", name: "撰写详细设计文档", ownerRole: "DEV", agent: "AI 研发",
+              template: "详细设计文档模板 → 详细设计文档", status: "WAITING_TRIGGER",
+              inputs: ["detail_template", "prd", "arch"], contexts: [WIKI_ROOT],
+              repoPath: "git@example.com:acct/web-login.git",
+              promptKey: "prompt_detail", sessionKey: "gen_detail",
+              pauseJsonKey: "pause_json_detail", outputKey: "detail_doc",
+              confirmExpanded: false, confirmJson: null, docWritten: false,
+              writeLabel: "详细设计文档"
+            }
+          ]
+        },
+        {
+          id: "gen_cases", name: "测试用例", kind: "ai_gen", status: "PENDING", round: 1, role: "QA",
+          inputs: ["cases_template", "prd"], outputs: [],
+          contexts: [WIKI_ROOT],
+          promptKey: "prompt_cases", optional: false, flowKind: "gen_downstream",
+          tasks: [
+            {
+              id: "cases_write", name: "撰写需求测试用例", ownerRole: "QA", agent: "AI 测试",
+              template: "需求测试用例模板 → 需求测试用例", status: "WAITING_TRIGGER",
+              inputs: ["cases_template", "prd"], contexts: [WIKI_ROOT],
+              repoPath: "git@example.com:acct/web-login.git",
+              promptKey: "prompt_cases", sessionKey: "gen_cases",
+              pauseJsonKey: "pause_json_cases", outputKey: "cases_doc",
+              confirmExpanded: false, confirmJson: null, docWritten: false,
+              writeLabel: "需求测试用例"
+            }
+          ]
+        },
+        {
+          id: "detail_review", name: "详细设计评审", kind: "ai_review", status: "PENDING", round: 1,
+          role: "ARCH+PM+QA", flowKind: "multi_review",
+          inputs: ["detail_doc", "review_tpl"], outputs: [],
+          contexts: [WIKI_ROOT],
+          tasks: [
+            {
+              id: "detail_rev_arch", name: "架构评审", ownerRole: "ARCH", agent: "AI 架构评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["detail_doc", "review_tpl"], contexts: [WIKI_ROOT],
+              repoPath: "git@example.com:acct/web-login.git",
+              promptKey: "prompt_review_detail", sessionKey: "detail_rev_arch",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_detail_arch",
+              writeLabel: "详细设计评审-架构"
+            },
+            {
+              id: "detail_rev_pm", name: "产品评审", ownerRole: "PM", agent: "AI 产品评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["detail_doc", "review_tpl"], contexts: [WIKI_ROOT],
+              promptKey: "prompt_review_detail", sessionKey: "detail_rev_pm",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_detail_pm",
+              writeLabel: "详细设计评审-产品"
+            },
+            {
+              id: "detail_rev_qa", name: "测试评审", ownerRole: "QA", agent: "AI 测试评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["detail_doc", "review_tpl"], contexts: [WIKI_ROOT],
+              promptKey: "prompt_review_detail", sessionKey: "detail_rev_qa",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_detail_qa",
+              writeLabel: "详细设计评审-测试"
+            }
+          ]
+        },
+        {
+          id: "cases_review", name: "测试用例评审", kind: "ai_review", status: "PENDING", round: 1,
+          role: "ARCH+PM+DEV", flowKind: "multi_review",
+          inputs: ["cases_doc", "review_tpl"], outputs: [],
+          contexts: [WIKI_ROOT],
+          tasks: [
+            {
+              id: "case_rev_arch", name: "架构评审", ownerRole: "ARCH", agent: "AI 架构评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["cases_doc", "review_tpl"], contexts: [WIKI_ROOT],
+              promptKey: "prompt_review_cases", sessionKey: "case_rev_arch",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_case_arch",
+              writeLabel: "测试用例评审-架构"
+            },
+            {
+              id: "case_rev_pm", name: "产品评审", ownerRole: "PM", agent: "AI 产品评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["cases_doc", "review_tpl"], contexts: [WIKI_ROOT],
+              promptKey: "prompt_review_cases", sessionKey: "case_rev_pm",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_case_pm",
+              writeLabel: "测试用例评审-产品"
+            },
+            {
+              id: "case_rev_dev", name: "研发评审", ownerRole: "DEV", agent: "AI 研发评审",
+              template: "评审模板", status: "WAITING_TRIGGER",
+              inputs: ["cases_doc", "review_tpl"], contexts: [WIKI_ROOT],
+              repoPath: "git@example.com:acct/web-login.git",
+              promptKey: "prompt_review_cases", sessionKey: "case_rev_dev",
+              pauseJsonKey: "pause_json_rev", outputKey: "review_case_dev",
+              writeLabel: "测试用例评审-研发"
+            }
+          ]
+        },
+        {
+          id: "doc_revise_dt", name: "文档修订（详设/用例）", kind: "ai_revise", status: "PENDING", round: 1,
+          role: "DEV+QA", flowKind: "doc_revise",
+          inputs: ["review_merged_detail", "review_merged_cases", "detail_doc", "cases_doc"], outputs: [],
+          contexts: [WIKI_ROOT],
+          tasks: []
+        },
+        {
+          id: "gen_coding", name: "开发编码", kind: "ai_gen", status: "PENDING", round: 1, role: "DEV",
+          inputs: ["detail_doc", "prd"], outputs: [],
+          contexts: [WIKI_ROOT],
+          promptKey: "prompt_coding", optional: false, flowKind: "gen_coding",
+          tasks: [
+            {
+              id: "coding_write", name: "按详设编码", ownerRole: "DEV", agent: "AI 研发编码",
+              template: "详细设计 → 代码变更 + 可自动化用例", status: "WAITING_TRIGGER",
+              inputs: ["detail_doc", "prd"], contexts: [WIKI_ROOT],
+              repoPath: "git@example.com:acct/web-login.git",
+              promptKey: "prompt_coding", sessionKey: "gen_coding",
+              pauseJsonKey: "pause_json_coding", outputKey: "coding_out",
+              confirmExpanded: false, confirmJson: null, docWritten: false,
+              writeLabel: "编码完成报告"
+            }
+          ]
+        },
+        {
+          id: "gen_int_test", name: "集成测试", kind: "ai_gen", status: "PENDING", round: 1, role: "QA",
+          inputs: ["cases_doc", "coding_out"], outputs: [],
+          contexts: [WIKI_ROOT],
+          promptKey: "prompt_int_test", optional: false, flowKind: "gen_int_test",
+          tasks: [
+            {
+              id: "int_test_run", name: "自动化集成覆盖", ownerRole: "QA", agent: "AI 集成测试",
+              template: "可自动化用例 → 测试仓库执行 → 集成测试报告", status: "WAITING_TRIGGER",
+              inputs: ["cases_doc", "coding_out", "detail_doc"], contexts: [WIKI_ROOT],
+              repoPath: "git@example.com:acct/web-login-tests.git",
+              promptKey: "prompt_int_test", sessionKey: "gen_int_test",
+              pauseJsonKey: "pause_json_int_test", outputKey: "int_test_report",
+              confirmExpanded: false, confirmJson: null, docWritten: false,
+              writeLabel: "集成测试报告"
+            }
+          ]
+        },
+        { id: "done", name: "流水线结束", kind: "system", status: "PENDING", round: 1, role: "—", inputs: [], outputs: [], contexts: [] }
       ];
       selectedId = "ai_pre";
       activeTaskId = "pre_biz";
+      expandedConfirm = null;
+      summaryStatus = "PENDING";
+      resetTrackMerges();
       instanceStatus = "RUNNING";
       reviseRound = 1;
+      reqBizStatus = "REVIEWING";
+      // 重置演示用确认态
+      gateState.confirmed.forEach((x) => { x.decision = null; x.disagreeText = ""; });
+      gateState.suspected.forEach((x) => { x.answer = ""; });
     }
 
     function setViewerRole(v) {
@@ -859,21 +1799,77 @@
     }
 
     function canTriggerRole(ownerRole) {
-      if (viewerRole === "BOTH") return ownerRole === "PM" || ownerRole === "ARCH";
+      if (viewerRole === "BOTH") {
+        return ["PM", "ARCH", "UI", "DEV", "QA"].includes(ownerRole);
+      }
       return viewerRole === ownerRole;
     }
 
     function syncAiPreStatus(step) {
       if (!step.tasks) return;
-      const sts = step.tasks.map((t) => t.status);
-      if (sts.every((x) => x === "SUCCEEDED")) {
+      const allDocs = step.tasks.every((t) => t.docWritten);
+      const isGenPrd = step.id === "gen_prd" || step.flowKind === "gen_prd";
+      const isDesign = step.id === "gen_arch" || step.id === "gen_ui" || step.flowKind === "gen_design";
+      const isDownstream = step.flowKind === "gen_downstream" || step.id === "gen_detail" || step.id === "gen_cases";
+      const isCoding = step.flowKind === "gen_coding" || step.id === "gen_coding";
+      const isIntTest = step.flowKind === "gen_int_test" || step.id === "gen_int_test";
+      const isMultiReview = step.flowKind === "multi_review";
+      const isDocRevise = step.flowKind === "doc_revise" || step.id === "doc_revise" || step.id === "doc_revise_dt";
+      if (!isGenPrd && !isDesign && !isDownstream && !isCoding && !isIntTest && !isMultiReview && !isDocRevise && summaryStatus === "SUCCEEDED") {
         step.status = "SUCCEEDED";
-        step.outputs = step.tasks.map((t) => t.outputKey).filter(Boolean);
-      } else if (sts.some((x) => x === "RUNNING")) {
-        step.status = "RUNNING";
-      } else {
-        step.status = "WAITING_TRIGGER";
+        step.outputs = step.tasks.map((t) => t.outputKey).concat(["review_summary"]);
+        return;
       }
+      if (!isGenPrd && !isDesign && !isDownstream && !isCoding && !isIntTest && !isMultiReview && !isDocRevise && summaryStatus === "RUNNING") {
+        step.status = "RUNNING";
+        return;
+      }
+      if (isDocRevise) {
+        const allDone = step.tasks.every((t) => t.status === "SUCCEEDED" || t.status === "SKIPPED");
+        if (allDone && step.tasks.length) {
+          step.status = "SUCCEEDED";
+          step.outputs = step.tasks.filter((t) => t.needModify && t.outputKey).map((t) => t.outputKey);
+          return;
+        }
+        if (step.tasks.some((t) => t.status === "WAITING_SELECT")) {
+          step.status = "WAITING_HUMAN";
+          return;
+        }
+        if (step.tasks.some((t) => t.status === "RUNNING")) {
+          step.status = "RUNNING";
+          return;
+        }
+        if (step.tasks.some((t) => t.status === "WAITING_TRIGGER")) {
+          step.status = "WAITING_TRIGGER";
+          return;
+        }
+        step.status = "RUNNING";
+        return;
+      }
+      if (allDocs) {
+        step.outputs = step.tasks.map((t) => t.outputKey).filter(Boolean);
+        if (isGenPrd) {
+          step.status = step.branchChoice ? "SUCCEEDED" : "WAITING_BRANCH";
+        } else if (isDesign || isDownstream || isCoding || isIntTest || isMultiReview) {
+          step.status = "SUCCEEDED";
+        } else {
+          step.status = "RUNNING";
+        }
+        return;
+      }
+      if (step.tasks.some((t) => t.status === "WAITING_CONFIRM")) {
+        step.status = "WAITING_HUMAN";
+        return;
+      }
+      if (step.tasks.some((t) => t.status === "RUNNING")) {
+        step.status = "RUNNING";
+        return;
+      }
+      if (step.tasks.some((t) => t.status === "CONFIRMED" && !t.docWritten)) {
+        step.status = "RUNNING";
+        return;
+      }
+      step.status = "WAITING_TRIGGER";
     }
 
     function kindLabel(k) {
@@ -881,36 +1877,63 @@
     }
 
     function statusIcon(s) {
-      if (s === "SUCCEEDED") return "✓";
+      if (s === "SUCCEEDED" || s === "CONFIRMED") return "✓";
       if (s === "FAILED" || s === "CANCELLED") return "!";
-      if (["WAITING_HUMAN", "WAITING_TRIGGER", "RUNNING"].includes(s)) return "►";
+      if (["WAITING_HUMAN", "WAITING_TRIGGER", "WAITING_CONFIRM", "RUNNING"].includes(s)) return "►";
       return "○";
-    }
-
-    function statusTagClass(s) {
-      if (s === "WAITING_HUMAN" || s === "WAITING_TRIGGER") return "tag-warn";
-      if (s === "RUNNING") return "tag-run";
-      if (s === "SUCCEEDED" || s === "DONE") return "tag-ok";
-      if (s === "FAILED" || s === "CANCELLED") return "tag-bad";
-      return "tag-info";
     }
 
     function statusText(s) {
       const map = {
         WAITING_HUMAN: "等待确认",
         WAITING_TRIGGER: "待执行",
+        WAITING_CONFIRM: "待本岗确认",
+        CONFIRMED: "已确认",
         RUNNING: "运行中",
         SUCCEEDED: "已完成",
         PENDING: "未到达",
+        SKIPPED: "已跳过",
         FAILED: "失败",
         CANCELLED: "已取消",
-        DONE: "已完成"
+        DONE: "已完成",
+        PARKED: "已挂起（已入计划）",
+        WAITING_BRANCH: "待选择分支",
+        WAITING_SELECT: "待本岗确认是否修改"
       };
       return map[s] || s;
     }
 
+    function reqBizStatusText(s) {
+      return ({
+        REVIEWING: "评审中",
+        PLANNED: "已入计划",
+        IN_DEV: "投入研发"
+      })[s] || s;
+    }
+
+    function statusTagClass(s) {
+      if (s === "WAITING_HUMAN" || s === "WAITING_TRIGGER" || s === "WAITING_CONFIRM" || s === "WAITING_SELECT" || s === "PARKED" || s === "WAITING_BRANCH") return "tag-warn";
+      if (s === "RUNNING") return "tag-run";
+      if (s === "SUCCEEDED" || s === "DONE" || s === "CONFIRMED" || s === "SKIPPED") return "tag-ok";
+      if (s === "FAILED" || s === "CANCELLED") return "tag-bad";
+      return "tag-info";
+    }
+
+    function anyTrackMergeWaiting() {
+      return Object.values(reviewMergeByTrack).some((g) => g && g.status === "WAITING_HUMAN");
+    }
+
+    function trackMergeOf(reviewId) {
+      return reviewMergeByTrack[reviewId] || null;
+    }
+
     function currentStep() {
-      return steps.find((s) => ["WAITING_HUMAN", "WAITING_TRIGGER", "RUNNING"].includes(s.status))
+      if (anyTrackMergeWaiting()) {
+        return steps.find((s) => s.id === selectedId)
+          || steps.find((s) => trackMergeOf(s.id) && trackMergeOf(s.id).status === "WAITING_HUMAN")
+          || steps[0];
+      }
+      return steps.find((s) => ["WAITING_HUMAN", "WAITING_TRIGGER", "WAITING_BRANCH", "RUNNING"].includes(s.status))
         || steps.find((s) => s.id === selectedId)
         || steps[0];
     }
@@ -960,15 +1983,28 @@
       document.getElementById("sumCurrent").textContent = cur ? cur.name : "—";
       const curStep = cur;
       let waitText = "—";
-      if (instanceStatus === "WAITING_HUMAN") waitText = "人闸审批";
-      else if (instanceStatus === "CANCELLED") waitText = "已取消";
+      if (instanceStatus === "WAITING_HUMAN") {
+        waitText = (cur && cur.status === "WAITING_BRANCH") ? "选择是否启动设计" : "人闸审批";
+      } else if (instanceStatus === "CANCELLED") waitText = "已取消";
+      else if (instanceStatus === "PARKED") waitText = "已入计划 · 未投入研发";
       else if (instanceStatus === "DONE") waitText = "—";
-      else if (curStep && curStep.tasks) {
-        const left = curStep.tasks.filter((t) => t.status !== "SUCCEEDED").length;
-        waitText = left ? "双 Agent 待齐（剩 " + left + "）" : "AI 执行中";
+      else if (anyTrackMergeWaiting()) {
+        const w = Object.keys(reviewMergeByTrack).filter((id) => reviewMergeByTrack[id].status === "WAITING_HUMAN")
+          .map((id) => (TRACK_FLOW[id] && TRACK_FLOW[id].label) || id);
+        waitText = "合并确认：" + w.join("、");
+      } else if (curStep && curStep.tasks) {
+        if (summaryStatus === "RUNNING") waitText = "汇总评审书";
+        else if (summaryStatus === "SUCCEEDED") waitText = "—";
+        else if (curStep.tasks.some((t) => t.status === "WAITING_CONFIRM")) waitText = "单元内确认";
+        else {
+          const left = curStep.tasks.filter((t) => t.status !== "CONFIRMED").length;
+          waitText = left ? "双 Agent/确认待齐" : "待生成评审书";
+        }
       } else if (instanceStatus === "RUNNING") waitText = "AI 执行中";
       document.getElementById("sumWait").textContent = waitText;
       document.getElementById("sumRound").textContent = String(sel && sel.gate ? sel.round : reviseRound);
+      const reqEl = document.getElementById("sumReqStatus");
+      if (reqEl) reqEl.textContent = reqBizStatusText(reqBizStatus);
 
       const tl = document.getElementById("timeline");
       tl.innerHTML = steps.map((s) => {
@@ -1001,26 +2037,48 @@
       }
       hint.textContent = kindLabel(s.kind);
 
-      const inputBtns = (s.inputs || []).map((k) =>
-        `<button type="button" class="link-btn" onclick="openDoc('${k}')">输入 · ${DOCS[k] ? DOCS[k].title.replace(/^输入 · /, "") : k}</button>`
-      ).join("");
-      const outputBtns = (s.outputs || []).length
-        ? (s.outputs || []).map((k) =>
-          `<button type="button" class="link-btn" onclick="openDoc('${k}')">输出 · ${DOCS[k] ? DOCS[k].title.replace(/^输出 · /, "") : k}</button>`
-        ).join("")
-        : `<button type="button" class="link-btn" disabled>暂无输出文档</button>`;
-
-      const promptBtn = s.promptKey
-        ? `<button type="button" class="link-btn" onclick="openDoc('${s.promptKey}')">查看首次提示词</button>`
-        : (s.tasks ? "" : `<button type="button" class="link-btn" disabled>无人值守提示词</button>`);
-
       let gateHtml = "";
-      if (s.autoPass && s.status === "SUCCEEDED") {
+      // 本轨合并确认（该轨 Agent 齐后立刻触发，不等其他轨）
+      const trackGate = trackMergeOf(s.id);
+      if (trackGate && trackGate.status === "WAITING_HUMAN"
+          && instanceStatus !== "CANCELLED" && instanceStatus !== "DONE" && instanceStatus !== "PARKED") {
+        gateHtml = renderTrackMergePanel(s.id);
+      } else if (trackGate && trackGate.status === "SUCCEEDED" && s.flowKind === "multi_review") {
+        const dk = trackGate.mergedDocKey || (TRACK_FLOW[s.id] && TRACK_FLOW[s.id].mergedDocKey);
+        gateHtml = `<div class="gate"><div class="note">本轨合并已确认 → 请到「文档修订」节点，在对应修订 Agent 任务里由<strong>本岗再次确认</strong>是否修改。
+          ${dk ? `<a class="doc-link" href="javascript:void(0)" onclick="openDoc('${dk}')">打开本轨合并评审</a>` : ""}
+        </div></div>`;
+      } else if (s.autoPass && s.status === "SUCCEEDED") {
         gateHtml = `<div class="auto-pass-note">自动化流程内本节点<strong>默认直接通过</strong>（不停留等人点确认）。时间线仍保留节点便于追溯。</div>`;
-      } else if (s.gate && s.status === "WAITING_HUMAN" && instanceStatus !== "CANCELLED" && instanceStatus !== "DONE") {
-        gateHtml = renderGatePanel(s);
+      } else if (s.gate && s.status === "WAITING_HUMAN" && instanceStatus !== "CANCELLED" && instanceStatus !== "DONE" && instanceStatus !== "PARKED") {
+        gateHtml = s.gateKind === "pm_second" ? renderPmSecondPanel(s) : renderGatePanel(s);
       } else if (s.gate && s.status === "SUCCEEDED") {
-        gateHtml = `<div class="gate"><div class="note">本节点已确认（演示）。</div></div>`;
+        if (s.gateKind === "pm_second") {
+          const mode = s.passMode === "park" ? "仅通过 · 需求进入「已入计划」，流水线挂起"
+            : s.passMode === "continue" ? "通过并投入研发 · 已启动下一步"
+            : "已通过";
+          const rel = `<div class="pm2-release-done">发布版本：<b>${escapeHtml(s.releaseVersion || "—")}</b>
+            &nbsp;·&nbsp;发布时间：<b>${escapeHtml(s.releaseAt || "—")}</b>
+            <br />需求状态：<b>${escapeHtml(reqBizStatusText(reqBizStatus))}</b></div>`;
+          gateHtml = `<div class="gate"><div class="note">二审已处理（${mode}）。</div>${rel}${renderPmSecondResultsReadonly()}</div>`;
+        } else {
+          gateHtml = `<div class="gate"><div class="note">本节点已确认（演示）。</div></div>`;
+        }
+      } else if (s.flowKind === "doc_revise" && s.status === "SUCCEEDED") {
+        const changed = (s.tasks || []).filter((t) => t.needModify);
+        const skipped = (s.tasks || []).filter((t) => t.needModify === false);
+        gateHtml = `<div class="gate"><div class="note">文档修订已收束：
+          ${changed.length ? ("已修订 " + changed.map((t) => t.writeLabel).join("、")) : "无文档变更"}
+          ${skipped.length ? ("；无需修改已结束：" + skipped.map((t) => t.name).join("、")) : ""}
+          → 已进入详细设计 + 测试用例
+        </div></div>`;
+      } else if (s.flowKind === "doc_revise" && (s.tasks || []).some((t) => t.status === "WAITING_SELECT")) {
+        gateHtml = `<div class="gate"><div class="note">在下方各<strong>修订 Agent 任务单元</strong>内：由对应岗位再次确认合并问题是否需要修改；勾选需改项后再执行，或本岗直接结束该 Agent。</div></div>`;
+      }
+
+      let branchHtml = "";
+      if (s.id === "gen_prd" && (s.status === "WAITING_BRANCH" || (s.branchChoice && s.status === "SUCCEEDED"))) {
+        branchHtml = renderPrdBranchPanel(s);
       }
 
       let aiAct = "";
@@ -1037,60 +2095,805 @@
           <button type="button" class="btn btn-sm" onclick="onFinishAi('${s.id}')">模拟完成</button></div>`;
       }
 
+      // 合并确认置顶，避免被任务单元挤到视口外
       box.innerHTML = `
         <h3 class="detail-title">${s.name} <span class="tag ${statusTagClass(s.status)}">${statusText(s.status)}</span>${s.autoPass ? ' <span class="tag tag-ok">默认通过</span>' : ""}</h3>
+        ${gateHtml}
         <div class="detail-grid">
           <div><label>执行类型</label>${kindLabel(s.kind)}</div>
           <div><label>岗位</label>${s.role}</div>
           <div><label>轮次</label>r${s.round}</div>
           <div><label>节点 ID</label><span class="muted">${s.id}</span></div>
-        </div>
-        <div class="muted" style="margin-bottom:6px">文档与提示词</div>
-        <div class="doc-row">${inputBtns}${outputBtns}${promptBtn}</div>
+            </div>
+        ${renderDocIOBlocks(s)}
         ${aiAct}
-        ${gateHtml}`;
+        ${branchHtml}`;
+    }
+
+    function renderPrdBranchPanel(s) {
+      if (s.branchChoice) {
+        const parts = [];
+        parts.push(s.branchChoice.needArch ? "已启动架构设计" : "已跳过架构设计");
+        parts.push(s.branchChoice.needUi ? "已启动 UI 设计" : "已跳过 UI 设计");
+        return `<div class="gate">
+          <h4>下游分支（已确认）</h4>
+          <div class="note">${parts.join(" · ")} → 随后进入需求设计PRD评审，再按是否生成过设计进入架构/UI 评审。</div>
+        </div>`;
+      }
+      const archChecked = s._draftNeedArch === true ? "checked" : "";
+      const uiChecked = s._draftNeedUi === true ? "checked" : "";
+      return `<div class="gate">
+        <h4>产品需求说明书已生成 · 选择是否启动设计</h4>
+        <div class="note">不勾选则跳过对应设计节点；之后进入 <b>需求设计PRD评审</b>（研发/测试），再视情况进入架构/UI 评审。</div>
+        <div class="pm2-form" style="grid-template-columns:1fr">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--dap-gray-700);font-size:13px">
+            <input type="checkbox" id="chkNeedArch" ${archChecked} onchange="onPrdBranchDraft('needArch', this.checked)" />
+            启动架构设计
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--dap-gray-700);font-size:13px">
+            <input type="checkbox" id="chkNeedUi" ${uiChecked} onchange="onPrdBranchDraft('needUi', this.checked)" />
+            启动 UI 设计
+          </label>
+          </div>
+        <div class="gate-actions">
+          <span class="grow"></span>
+          <button type="button" class="btn btn-primary" onclick="onConfirmPrdBranch()">确认并继续</button>
+        </div>
+      </div>`;
+    }
+
+    function onPrdBranchDraft(field, checked) {
+      const s = steps.find((x) => x.id === "gen_prd");
+      if (!s) return;
+      if (field === "needArch") s._draftNeedArch = checked;
+      if (field === "needUi") s._draftNeedUi = checked;
+    }
+
+    function onConfirmPrdBranch() {
+      const s = steps.find((x) => x.id === "gen_prd");
+      if (!s || s.status !== "WAITING_BRANCH") return;
+      if (!canTriggerRole("PM")) {
+        toast("仅产品经理可选择下游分支");
+        return;
+      }
+      const archEl = document.getElementById("chkNeedArch");
+      const uiEl = document.getElementById("chkNeedUi");
+      const needArch = !!(archEl && archEl.checked);
+      const needUi = !!(uiEl && uiEl.checked);
+      s.branchChoice = { needArch, needUi };
+      s._draftNeedArch = needArch;
+      s._draftNeedUi = needUi;
+      s.status = "SUCCEEDED";
+
+      const arch = steps.find((x) => x.id === "gen_arch");
+      const ui = steps.find((x) => x.id === "gen_ui");
+      if (arch) arch.status = needArch ? "WAITING_TRIGGER" : "SKIPPED";
+      if (ui) ui.status = needUi ? "WAITING_TRIGGER" : "SKIPPED";
+
+      if (needArch || needUi) {
+        instanceStatus = "RUNNING";
+        selectedId = needArch ? "gen_arch" : "gen_ui";
+        toast((needArch && needUi) ? "已启动架构设计 + UI 设计（都完成后一并开评审）" : (needArch ? "已启动架构设计" : "已启动 UI 设计"));
+      } else {
+        tryEnterParallelReviews();
+      }
+      render();
+    }
+
+    /** 架构+UI（所选）都结束后，同时打开：需求PRD / 架构 / UI 评审（未生成的设计 → 对应评审跳过） */
+    function tryEnterParallelReviews() {
+      const arch = steps.find((x) => x.id === "gen_arch");
+      const ui = steps.find((x) => x.id === "gen_ui");
+      const prdRev = steps.find((x) => x.id === "prd_review");
+      if (!prdRev || prdRev.status !== "PENDING") return false;
+      const archDone = !arch || ["SUCCEEDED", "SKIPPED"].includes(arch.status);
+      const uiDone = !ui || ["SUCCEEDED", "SKIPPED"].includes(ui.status);
+      if (!archDone || !uiDone) return false;
+
+      const archRev = steps.find((x) => x.id === "arch_review");
+      const uiRev = steps.find((x) => x.id === "ui_review");
+
+      function armReview(node, enable) {
+        if (!node) return;
+        if (!enable) {
+          if (node.status === "PENDING" || node.status === "WAITING_TRIGGER") node.status = "SKIPPED";
+          return;
+        }
+        node.status = "WAITING_TRIGGER";
+        if (node.tasks) {
+          node.tasks.forEach((t) => {
+            t.status = "WAITING_TRIGGER";
+            t.docWritten = false;
+            t.confirmJson = null;
+          });
+        }
+      }
+
+      armReview(prdRev, true);
+      armReview(archRev, !!(arch && arch.status === "SUCCEEDED"));
+      armReview(uiRev, !!(ui && ui.status === "SUCCEEDED"));
+
+      instanceStatus = "RUNNING";
+      selectedId = "prd_review";
+      activeTaskId = prdRev.tasks && prdRev.tasks[0] ? prdRev.tasks[0].id : null;
+      const names = ["需求设计PRD评审"];
+      if (archRev && archRev.status === "WAITING_TRIGGER") names.push("架构设计评审");
+      if (uiRev && uiRev.status === "WAITING_TRIGGER") names.push("UI设计评审");
+      toast("设计侧已齐 → 同时启动：" + names.join("、"));
+      return true;
+    }
+
+    /** 某轨评审 Agent 全部写完 → 立刻触发该轨合并（不等其他轨） */
+    function triggerTrackMerge(reviewId) {
+      const def = TRACK_FLOW[reviewId];
+      if (!def) return false;
+      const gate = reviewMergeByTrack[reviewId];
+      if (!gate || gate.status !== "IDLE") return false;
+      gate.status = "WAITING_HUMAN";
+      gate.mergeItems = def.mergeItems.map((x) => ({ ...x, valuable: null }));
+      gate.mergedDocKey = def.mergedDocKey;
+      selectedId = reviewId;
+      instanceStatus = "WAITING_HUMAN";
+      toast(def.label + " 评审 Agent 已齐 → 请确认本轨合并（确认后进入是否修改勾选）");
+      return true;
+    }
+
+    function renderTrackMergePanel(reviewId) {
+      const def = TRACK_FLOW[reviewId];
+      const gate = trackMergeOf(reviewId);
+      if (!def || !gate) return "";
+      const items = gate.mergeItems || [];
+      const cards = items.map((it) => {
+        const val = it.valuable;
+        return `<div class="rv-card ${val === true ? "done-agree" : val === false ? "done-disagree" : ""}">
+          <div class="rv-hd"><span class="id">${it.id}</span><span class="desc">${escapeHtml(it.title)}</span>
+            <span class="tag tag-info">${it.target}</span></div>
+          <div class="rv-meta">评审人：${escapeHtml(it.reviewers.join("、"))}（相同问题已合并）</div>
+          <div class="rv-actions">
+            <button type="button" class="btn btn-sm ${val === true ? "chip-on" : ""}" onclick="setTrackMergeValuable('${reviewId}','${it.id}', true)">有价值</button>
+            <button type="button" class="btn btn-sm ${val === false ? "chip-on" : ""}" onclick="setTrackMergeValuable('${reviewId}','${it.id}', false)">无价值</button>
+      </div>
+        </div>`;
+      }).join("");
+      return `<div class="gate">
+        <h4>${escapeHtml(def.label)} · 本轨合并确认</h4>
+        <div class="note">本轨评审 Agent 齐后立刻触发（不等其他轨）。确认后进入「文档修订」节点；在修订 Agent 任务里由<strong>本岗再次确认</strong>是否修改。
+          <a class="doc-link" href="javascript:void(0)" onclick="openDoc('review_result_json')">查看汇总 JSON</a></div>
+        ${cards || "<p class='muted'>无条目</p>"}
+        <div class="gate-actions">
+          <span class="grow"></span>
+          <button type="button" class="btn btn-primary" onclick="onConfirmTrackMerge('${reviewId}')">确认并生成本轨合并评审</button>
+        </div>
+      </div>`;
+    }
+
+    function setTrackMergeValuable(reviewId, itemId, valuable) {
+      const gate = trackMergeOf(reviewId);
+      if (!gate || gate.status !== "WAITING_HUMAN" || !gate.mergeItems) return;
+      const it = gate.mergeItems.find((x) => x.id === itemId);
+      if (it) it.valuable = valuable;
+      render();
+    }
+
+    function onConfirmTrackMerge(reviewId) {
+      const def = TRACK_FLOW[reviewId];
+      const gate = trackMergeOf(reviewId);
+      if (!def || !gate || gate.status !== "WAITING_HUMAN") return;
+      const items = gate.mergeItems || [];
+      if (items.some((x) => x.valuable == null)) {
+        toast("请先对本轨每条标记「有价值 / 无价值」");
+        return;
+      }
+      const valuable = items.filter((x) => x.valuable === true);
+      const lines = valuable.map((x) =>
+        `| ${x.id} | ${x.target} | ${x.title} | ${x.reviewers.join("、")} |`
+      ).join("\n");
+      const docKey = def.mergedDocKey;
+      if (DOCS[docKey]) {
+        DOCS[docKey].body = "# 合并评审 · " + def.label + "\n\n| 编号 | 对象 | 问题 | 评审人 |\n|---|---|---|---|\n"
+          + (lines || "| — | — | （无有效项） | — |")
+          + "\n\n> 本轨合并；有价值项进入「是否修改」勾选后再决定是否修订。\n";
+      }
+      gate.mergedDocKey = docKey;
+      gate.status = "SUCCEEDED";
+      enqueueTrackRevise(reviewId, valuable);
+      render();
+    }
+
+    /**
+     * 本轨合并后进入修订任务：Agent 执行前先勾选「合并问题是否需要修改」。
+     * 无有效项或不需改 → 可直接结束本 Agent；勾选需改后再执行修订。
+     */
+    function enqueueTrackRevise(reviewId, valuableItems) {
+      const def = TRACK_FLOW[reviewId];
+      const reviseNodeId = (def && def.reviseNodeId) || "doc_revise";
+      const revise = steps.find((x) => x.id === reviseNodeId);
+      if (!def || !revise) return;
+      if (!revise.tasks) revise.tasks = [];
+      if (revise.tasks.some((t) => t.id === def.revise.id)) {
+        toast(def.label + " 修订任务已在队列中");
+        tryEnterNextAfterRevises(def.phase || "design");
+        return;
+      }
+      const r = def.revise;
+      const items = (valuableItems || []).map((x) => ({
+        id: x.id, title: x.title, target: x.target,
+        reviewers: x.reviewers || [], needFix: false
+      }));
+      const task = {
+        id: r.id, name: r.name, ownerRole: r.ownerRole, agent: r.agent,
+        template: r.template,
+        status: items.length ? "WAITING_SELECT" : "SUCCEEDED",
+        inputs: r.inputs, contexts: r.contexts || [WIKI_ROOT],
+        promptKey: r.promptKey, sessionKey: r.sessionKey,
+        outputKey: r.outputKey, writeLabel: r.writeLabel, target: r.target,
+        needModify: items.length ? null : false,
+        docWritten: false,
+        reviewId: reviewId,
+        mergeItems: items,
+        selectedFixIds: [],
+        selectOpened: false
+      };
+      revise.tasks.push(task);
+      if (revise.status === "PENDING" || revise.status === "SKIPPED") {
+        revise.status = items.length ? "WAITING_HUMAN" : "SUCCEEDED";
+      }
+      syncAiPreStatus(revise);
+      selectedId = revise.id;
+      activeTaskId = r.id;
+      if (!items.length) {
+        instanceStatus = anyTrackMergeWaiting() ? "WAITING_HUMAN" : "RUNNING";
+        toast(def.label + " 合并无有效项 → 本轨修订 Agent 直接结束");
+        tryEnterNextAfterRevises(def.phase || "design");
+        return;
+      }
+      instanceStatus = "WAITING_HUMAN";
+      toast(def.label + " 合并已确认 → 请在修订节点本岗 Agent 内确认问题项（提示词见提示词管理）");
+    }
+
+    /** 任务单元一开始只有「确认问题项」；点开后才展开勾选面板 */
+    function openReviseConfirm(stepId, taskId) {
+      const s = steps.find((x) => x.id === stepId);
+      if (!s || !s.tasks) return;
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t || t.status !== "WAITING_SELECT") return;
+      if (!canTriggerRole(t.ownerRole)) {
+        toast("仅本岗可确认问题项");
+        return;
+      }
+      t.selectOpened = true;
+      activeTaskId = taskId;
+      selectedId = stepId;
+      render();
+    }
+
+    function toggleReviseFixItem(stepId, taskId, itemId, checked) {
+      const s = steps.find((x) => x.id === stepId);
+      if (!s || !s.tasks) return;
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t || t.status !== "WAITING_SELECT" || !t.mergeItems) return;
+      const it = t.mergeItems.find((x) => x.id === itemId);
+      if (it) it.needFix = !!checked;
+      t.selectedFixIds = t.mergeItems.filter((x) => x.needFix).map((x) => x.id);
+      render();
+    }
+
+    /** 认为都不用改 → 直接结束本轨修订 Agent */
+    function onSkipTrackRevise(stepId, taskId) {
+      const s = steps.find((x) => x.id === stepId);
+      if (!s || s.flowKind !== "doc_revise" || !s.tasks) return;
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t || t.status !== "WAITING_SELECT") return;
+      if (!canTriggerRole(t.ownerRole)) {
+        toast("仅本岗可结束本轨修订");
+        return;
+      }
+      t.needModify = false;
+      t.selectedFixIds = [];
+      t.status = "SUCCEEDED";
+      t.docWritten = false;
+      syncAiPreStatus(s);
+      instanceStatus = anyTrackMergeWaiting() ? "WAITING_HUMAN" : "RUNNING";
+      toast(t.name + "：无需修改 → 本 Agent 已结束");
+      const phase = (Object.values(TRACK_FLOW).find((d) => d.revise && d.revise.id === t.id) || {}).phase || "design";
+      tryEnterNextAfterRevises(phase);
+      render();
+    }
+
+    /** 勾选需改项并确认后 → 自动执行修订 Agent（无需再点执行） */
+    function onConfirmReviseSelect(stepId, taskId) {
+      const s = steps.find((x) => x.id === stepId);
+      if (!s || s.flowKind !== "doc_revise" || !s.tasks) return;
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t || t.status !== "WAITING_SELECT") return;
+      if (!canTriggerRole(t.ownerRole)) {
+        toast("仅本岗可确认修订范围");
+        return;
+      }
+      const selected = (t.mergeItems || []).filter((x) => x.needFix);
+      if (!selected.length) {
+        toast("未勾选任何需改项；若都不改请点「无需修改，结束本 Agent」");
+        return;
+      }
+      t.selectedFixIds = selected.map((x) => x.id);
+      t.needModify = true;
+      t.status = "WAITING_TRIGGER";
+      syncAiPreStatus(s);
+      instanceStatus = "RUNNING";
+      toast(t.name + "：已确认 " + selected.length + " 项需改 → 自动执行修订");
+      render();
+      setTimeout(() => onRunTask(stepId, taskId), 200);
+    }
+
+    function publishTrackRevise(t) {
+      if (t.outputKey === "prd") {
+        DOCS.prd.body = DOCS.prd.body.replace("V1", "现行") + "\n\n> （已按勾选问题修订发布；旧版入史版本）\n";
+      } else if (t.outputKey === "arch") {
+        DOCS.arch.body += "\n\n> （已按勾选问题修订发布；旧版入史版本）\n";
+      } else if (t.outputKey === "ui_design") {
+        DOCS.ui_design.body = DOCS.ui_design.body.replace("</body>", "  <p><!-- 已按勾选修订发布；旧版入史版本 --></p>\n</body>");
+      } else if (t.outputKey === "detail_doc") {
+        DOCS.detail_doc.body += "\n\n> （已按勾选问题修订发布；旧版入史版本）\n";
+      } else if (t.outputKey === "cases_doc") {
+        DOCS.cases_doc.body += "\n\n> （已按勾选问题修订发布；旧版入史版本）\n";
+      }
+      t.docWritten = true;
+      t.status = "SUCCEEDED";
+    }
+
+    /** design 修订齐 → 详设+用例；downstream 修订齐 → 开发编码 → 集成测试 → 结束 */
+    function tryEnterNextAfterRevises(phase) {
+      const reviewIds = trackIdsByPhase(phase);
+      for (let i = 0; i < reviewIds.length; i++) {
+        const id = reviewIds[i];
+        const node = steps.find((x) => x.id === id);
+        if (!node) continue;
+        if (node.status === "PENDING") return false;
+        if (node.status === "SKIPPED") continue;
+        if (node.status !== "SUCCEEDED") return false;
+        const gate = trackMergeOf(id);
+        if (!gate || gate.status !== "SUCCEEDED") return false;
+        const reviseNodeId = TRACK_FLOW[id].reviseNodeId || "doc_revise";
+        const revise = steps.find((x) => x.id === reviseNodeId);
+        const taskId = TRACK_FLOW[id].revise.id;
+        const task = revise && revise.tasks && revise.tasks.find((t) => t.id === taskId);
+        if (!task || task.status !== "SUCCEEDED") return false;
+      }
+      const anyReview = reviewIds.some((id) => {
+        const n = steps.find((x) => x.id === id);
+        return n && (n.status === "SUCCEEDED" || n.status === "SKIPPED");
+      });
+      if (!anyReview) return false;
+
+      const reviseNodeId = phase === "downstream" ? "doc_revise_dt" : "doc_revise";
+      const revise = steps.find((x) => x.id === reviseNodeId);
+      if (revise) {
+        const hasTasks = revise.tasks && revise.tasks.length;
+        if (hasTasks && revise.tasks.every((t) => t.status === "SUCCEEDED" || t.status === "SKIPPED")) {
+          revise.status = "SUCCEEDED";
+        } else if (!hasTasks) {
+          revise.status = "SKIPPED";
+        }
+      }
+      if (phase === "downstream") {
+        enterCoding();
+        return true;
+      }
+      const detail = steps.find((x) => x.id === "gen_detail");
+      if (detail && !["PENDING"].includes(detail.status)) return true;
+      enterDetailAndCases();
+      return true;
+    }
+
+    function tryEnterDetailAfterRevises() {
+      return tryEnterNextAfterRevises("design");
+    }
+
+    /** 详设/用例修订齐后：按详设触发开发编码 */
+    function enterCoding() {
+      const coding = steps.find((x) => x.id === "gen_coding");
+      if (!coding || coding.status !== "PENDING") return;
+      coding.status = "WAITING_TRIGGER";
+      if (coding.tasks) {
+        coding.tasks.forEach((t) => {
+          t.status = "WAITING_TRIGGER";
+          t.docWritten = false;
+          t.confirmJson = null;
+        });
+      }
+      instanceStatus = "RUNNING";
+      selectedId = coding.id;
+      activeTaskId = coding.tasks && coding.tasks[0] ? coding.tasks[0].id : null;
+      toast("详设/用例修订已齐 → 按详细设计启动「开发编码」");
+    }
+
+    function checkCodingDone() {
+      const coding = steps.find((x) => x.id === "gen_coding");
+      if (!coding || coding.status !== "SUCCEEDED") return false;
+      return enterIntTest();
+    }
+
+    /** 开发编码完成后 → 集成测试（测试仓库 + 可自动化用例） */
+    function enterIntTest() {
+      const node = steps.find((x) => x.id === "gen_int_test");
+      if (!node || node.status !== "PENDING") return false;
+      node.status = "WAITING_TRIGGER";
+      if (node.tasks) {
+        node.tasks.forEach((t) => {
+          t.status = "WAITING_TRIGGER";
+          t.docWritten = false;
+          t.confirmJson = null;
+        });
+      }
+      instanceStatus = "RUNNING";
+      selectedId = node.id;
+      activeTaskId = node.tasks && node.tasks[0] ? node.tasks[0].id : null;
+      toast("开发编码已完成 → 启动「集成测试」（测试仓库 + 可自动化用例）");
+      return true;
+    }
+
+    function checkIntTestDone() {
+      const node = steps.find((x) => x.id === "gen_int_test");
+      if (!node || node.status !== "SUCCEEDED") return false;
+      const done = steps.find((x) => x.id === "done");
+      if (done) {
+        done.status = "SUCCEEDED";
+        selectedId = done.id;
+      }
+      instanceStatus = "DONE";
+      toast("集成测试通过 → 已输出《集成测试报告》→ 流水线结束（演示）");
+      return true;
+    }
+
+
+    function enterDetailAndCases() {
+      const detail = steps.find((x) => x.id === "gen_detail");
+      const cases = steps.find((x) => x.id === "gen_cases");
+      function armGen(node) {
+        if (!node || node.status !== "PENDING") return;
+        node.status = "WAITING_TRIGGER";
+        if (node.tasks) {
+          node.tasks.forEach((t) => {
+            t.status = "WAITING_TRIGGER";
+            t.docWritten = false;
+            t.confirmJson = null;
+          });
+        }
+      }
+      armGen(detail);
+      armGen(cases);
+      instanceStatus = "RUNNING";
+      selectedId = detail ? detail.id : (cases ? cases.id : selectedId);
+      if (detail && detail.tasks && detail.tasks[0]) activeTaskId = detail.tasks[0].id;
+      toast("下一环节：详细设计 + 测试用例（并行 · 两段式）");
+    }
+
+    function checkDetailCasesDone() {
+      const detail = steps.find((x) => x.id === "gen_detail");
+      const cases = steps.find((x) => x.id === "gen_cases");
+      const dOk = !detail || ["SUCCEEDED", "SKIPPED"].includes(detail.status);
+      const cOk = !cases || ["SUCCEEDED", "SKIPPED"].includes(cases.status);
+      if (!dOk || !cOk) return false;
+      return tryEnterDetailCasesReviews();
+    }
+
+    /** 详设+用例生成齐 → 并行启动详细设计评审、测试用例评审 */
+    function tryEnterDetailCasesReviews() {
+      const detailRev = steps.find((x) => x.id === "detail_review");
+      const casesRev = steps.find((x) => x.id === "cases_review");
+      if (!detailRev || detailRev.status !== "PENDING") return false;
+      const detail = steps.find((x) => x.id === "gen_detail");
+      const cases = steps.find((x) => x.id === "gen_cases");
+
+      function armReview(node, enable) {
+        if (!node) return;
+        if (!enable) {
+          if (node.status === "PENDING" || node.status === "WAITING_TRIGGER") node.status = "SKIPPED";
+          return;
+        }
+        node.status = "WAITING_TRIGGER";
+        if (node.tasks) {
+          node.tasks.forEach((t) => {
+            t.status = "WAITING_TRIGGER";
+            t.docWritten = false;
+            t.confirmJson = null;
+          });
+        }
+      }
+      armReview(detailRev, !!(detail && detail.status === "SUCCEEDED"));
+      armReview(casesRev, !!(cases && cases.status === "SUCCEEDED"));
+      instanceStatus = "RUNNING";
+      selectedId = detailRev.status === "WAITING_TRIGGER" ? "detail_review" : "cases_review";
+      const names = [];
+      if (detailRev.status === "WAITING_TRIGGER") names.push("详细设计评审");
+      if (casesRev && casesRev.status === "WAITING_TRIGGER") names.push("测试用例评审");
+      toast("详设/用例已齐 → 同时启动：" + names.join("、") + "（各轨提示词见提示词管理）");
+      return true;
+    }
+
+    function docTitle(key) {
+      const d = DOCS[key];
+      if (!d) return key;
+      return d.title.replace(/^(输入|输出|首次提示词) · /, "");
+    }
+
+    function joinDocLinks(keys, emptyText) {
+      if (!keys || !keys.length) {
+        return `<span class="doc-muted">${escapeHtml(emptyText)}</span>`;
+      }
+      return keys.map((k, i) => {
+        const sep = i > 0 ? `<span class="doc-sep">·</span>` : "";
+        return `${sep}<a class="doc-link" href="javascript:void(0)" onclick="openDoc('${k}')">${escapeHtml(docTitle(k))}</a>`;
+      }).join("");
+    }
+
+    function renderContextInline(paths) {
+      if (!paths || !paths.length) {
+        return `<span class="doc-muted">无</span>`;
+      }
+      const first = escapeHtml(paths[0]);
+      if (paths.length === 1) {
+        return `<span class="ctx-one" title="${first}">${first}</span>`;
+      }
+      const tip = escapeHtml(paths.join("\n"));
+      return `<span class="ctx-one" title="${tip}">${first}</span><span class="ctx-more" title="${tip}">…</span>`;
+    }
+
+    /** 输入 / 输出 / 提示词：文字可点；上下文只展示一条路径，多条用 … 悬停看全部 */
+    function renderDocIOBlocks(s) {
+      const inKeys = s.inputs || [];
+      const outKeys = s.outputs || [];
+      const ctxPaths = s.contexts || [];
+      const promptHtml = s.promptKey
+        ? `<a class="doc-link" href="javascript:void(0)" onclick="openDoc('${s.promptKey}')">${escapeHtml(docTitle(s.promptKey))}</a>`
+        : (s.tasks ? `<span class="doc-muted">见各任务单元</span>` : `<span class="doc-muted">无</span>`);
+
+      return `
+        <div class="doc-block doc-inline"><span class="lab">输入文档</span>${joinDocLinks(inKeys, "无")}</div>
+        <div class="doc-block doc-inline"><span class="lab">输出文档</span>${joinDocLinks(outKeys, "暂无")}</div>
+        <div class="doc-block doc-inline"><span class="lab">上下文</span>${renderContextInline(ctxPaths)}</div>
+        <div class="doc-block doc-inline"><span class="lab">提示词</span>${promptHtml}</div>`;
     }
 
     function renderTaskUnits(s) {
+      const isGenPrd = s.flowKind === "gen_prd" || s.id === "gen_prd";
+      const isDesign = s.flowKind === "gen_design" || s.id === "gen_arch" || s.id === "gen_ui";
+      const isDownstream = s.flowKind === "gen_downstream" || s.id === "gen_detail" || s.id === "gen_cases";
+      const isCoding = s.flowKind === "gen_coding" || s.id === "gen_coding";
+      const isIntTest = s.flowKind === "gen_int_test" || s.id === "gen_int_test";
+      const isDocRevise = s.flowKind === "doc_revise" || s.id === "doc_revise" || s.id === "doc_revise_dt";
+      const writeVerb = isGenPrd ? "产品需求说明书"
+        : s.id === "gen_arch" ? "架构设计文档"
+        : s.id === "gen_ui" ? "UI设计.html"
+        : s.id === "gen_detail" ? "详细设计文档"
+        : s.id === "gen_cases" ? "需求测试用例"
+        : s.id === "gen_coding" ? "编码完成报告"
+        : s.id === "gen_int_test" ? "集成测试报告"
+        : "评审书";
       const cards = s.tasks.map((t) => {
         const can = canTriggerRole(t.ownerRole);
-        const mine = can ? "本岗可触发" : "可看 · 不可触发";
-        const outBtn = t.status === "SUCCEEDED" && t.outputKey
-          ? `<button type="button" class="link-btn" onclick="openDoc('${t.outputKey}')">输出文档</button>`
+        const mine = can ? "本岗可触发/确认" : "可看 · 不可触发/确认";
+        const docName = t.writeLabel || writeVerb;
+        const pauseBtn = (t.status === "WAITING_CONFIRM" || t.confirmJson) && t.pauseJsonKey
+          ? `<a class="doc-link" href="javascript:void(0)" onclick="openDoc('${t.pauseJsonKey}')">阶段1·问题JSON</a><span class="doc-sep">·</span>`
           : "";
-        const promptBtn = `<button type="button" class="link-btn" onclick="openDoc('${t.promptKey}')">首次提示词</button>`;
+        const outBtn = t.docWritten && t.outputKey
+          ? `<a class="doc-link" href="javascript:void(0)" onclick="openDoc('${t.outputKey}')">阶段2·${escapeHtml(docName)}</a><span class="doc-sep">·</span>`
+          : "";
+        const promptBtn = `<a class="doc-link" href="javascript:void(0)" onclick="openDoc('${t.promptKey}')">提示词</a>`;
         let act = "";
-        if (t.status === "WAITING_TRIGGER") {
+        if (isDocRevise) {
+          if (t.status === "WAITING_SELECT") {
+            const roleName = ({ PM: "产品经理", ARCH: "架构师", UI: "UI设计师", DEV: "研发", QA: "测试" })[t.ownerRole] || t.ownerRole;
+            if (!t.selectOpened) {
+              act = `<button type="button" class="btn btn-primary btn-sm" ${can ? "" : "disabled"}
+                onclick="openReviseConfirm('${s.id}','${t.id}')">确认问题项</button>
+                ${can ? "" : "<span class='muted'>仅" + escapeHtml(roleName) + "本岗可确认</span>"}`;
+            } else {
+              const list = (t.mergeItems || []).map((it) =>
+                `<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0;cursor:pointer">
+                  <input type="checkbox" ${it.needFix ? "checked" : ""} ${can ? "" : "disabled"}
+                    onchange="toggleReviseFixItem('${s.id}','${t.id}','${it.id}', this.checked)" />
+                  <span><b>${escapeHtml(it.id)}</b> ${escapeHtml(it.title)}
+                    <span class="muted">（${escapeHtml((it.reviewers || []).join("、"))}）</span></span>
+                </label>`
+              ).join("");
+              act = `<div class="tu-confirm" style="margin-top:8px">
+                <div class="note" style="margin-bottom:8px">
+                  <b>${escapeHtml(roleName)} · 确认问题项</b><br />
+                  勾选需要修改的合并问题；确认后<strong>自动执行修订</strong>。若都不用改，可直接结束本 Agent。
+      </div>
+                ${list || "<span class='muted'>无合并项</span>"}
+                <div class="gate-actions" style="margin-top:10px">
+                  <button type="button" class="btn btn-sm" ${can ? "" : "disabled"}
+                    onclick="onSkipTrackRevise('${s.id}','${t.id}')">无需修改，结束本 Agent</button>
+                  <span class="grow"></span>
+                  <button type="button" class="btn btn-primary btn-sm" ${can ? "" : "disabled"}
+                    onclick="onConfirmReviseSelect('${s.id}','${t.id}')">确认并执行修订</button>
+  </div>
+              </div>`;
+            }
+          } else if (t.status === "WAITING_TRIGGER" || t.status === "RUNNING") {
+            act = `<span class="muted">修订执行中…</span>`;
+          } else if (t.status === "SUCCEEDED") {
+            act = t.needModify
+              ? `<span class="muted">已按确认项修订并发布</span>`
+              : `<span class="muted">无需修改 · 本 Agent 已结束</span>`;
+          }
+        } else if (t.status === "WAITING_TRIGGER") {
           act = `<button type="button" class="btn btn-primary btn-sm" ${can ? "" : "disabled"}
             onclick="onRunTask('${s.id}','${t.id}')">执行 Agent</button>`;
         } else if (t.status === "RUNNING") {
-          act = `<button type="button" class="btn btn-sm" onclick="onFinishTask('${s.id}','${t.id}')">模拟完成</button>`;
-        } else if (t.status === "SUCCEEDED") {
-          act = `<span class="muted">已完成</span>`;
+          act = `<button type="button" class="btn btn-sm" onclick="onFinishTask('${s.id}','${t.id}')">模拟：吐出问题JSON</button>`;
+        } else if (t.status === "WAITING_CONFIRM") {
+          act = `<button type="button" class="btn btn-sm ${expandedConfirm === t.id ? "chip-on" : ""}" ${can ? "" : "disabled"}
+            onclick="toggleUnitConfirm('${t.id}')">${expandedConfirm === t.id ? "收起确认" : "展开确认"}</button>`;
+        } else if (t.status === "CONFIRMED" && !t.docWritten) {
+          act = `<span class="muted">确认已提交，正在继续写出《${escapeHtml(docName)}》…</span>
+            <a class="doc-link" href="javascript:void(0)" onclick="openDoc('confirm_json')">人确认JSON</a>`;
+        } else if (t.status === "CONFIRMED" && t.docWritten) {
+          act = `<span class="muted">本单元完成</span>`;
         }
+        const confirmPanel = (t.status === "WAITING_CONFIRM" && expandedConfirm === t.id)
+          ? `<div class="tu-confirm">${renderInlineConfirm(s.id, t)}</div>`
+          : "";
         const sel = activeTaskId === t.id ? " style=\"outline:1px solid var(--dap-primary)\"" : "";
+        const roleTag = ({ PM: "产品经理", ARCH: "架构师", UI: "UI设计师", DEV: "研发", QA: "测试" })[t.ownerRole] || t.ownerRole;
+        const taskIo = (t.inputs || t.contexts || t.repoPath)
+          ? `<br />输入：${(t.inputs || []).map(docTitle).join("、") || "—"}`
+            + `<br />上下文：${escapeHtml((t.contexts && t.contexts[0]) || "—")}${(t.contexts && t.contexts.length > 1) ? " …" : ""}`
+            + (t.repoPath ? `<br />代码仓库：<code>${escapeHtml(t.repoPath)}</code>` : "")
+          : "";
         return `<div class="tu"${sel}>
           <div class="tu-hd">
             <span class="name">${t.name}</span>
             <span class="tag ${statusTagClass(t.status)}">${statusText(t.status)}</span>
-            <span class="tag tag-info">${t.ownerRole === "PM" ? "产品" : "架构"}</span>
+            <span class="tag tag-info">${roleTag}</span>
           </div>
           <div class="tu-meta">
             Agent：${t.agent}<br />
             模板：${t.template}<br />
-            权限：${mine}${viewerRole === "BOTH" ? "（当前兼岗，两单元均可触发）" : ""}
+            权限：${mine}${viewerRole === "BOTH" ? "（兼岗）" : ""}${taskIo}
           </div>
           <div class="tu-actions">
-            ${promptBtn}${outBtn}
+            ${promptBtn}${pauseBtn ? `<span class="doc-sep">·</span>${pauseBtn}` : ""}${outBtn}
             <button type="button" class="btn btn-sm" onclick="focusTask('${t.id}')">查看执行</button>
             ${act}
           </div>
+          ${confirmPanel}
         </div>`;
       }).join("");
+
+      const allDocs = s.tasks.every((t) => t.docWritten);
+      let summaryBlock = "";
+      if (s.id === "ai_pre") {
+        if (allDocs && summaryStatus === "PENDING") {
+          summaryBlock = `<div class="tu" style="border-style:dashed">
+            <div class="tu-hd"><span class="name">汇总初审评审书</span><span class="tag tag-warn">可选</span></div>
+            <div class="tu-meta">两侧评审书齐后可汇总；也可直接进入产品经理二审。</div>
+            <div class="tu-actions">
+              <button type="button" class="btn btn-sm" onclick="onRunSummary('${s.id}')">汇总后再进二审</button>
+              <button type="button" class="btn btn-primary btn-sm" onclick="enterPmSecond({stayOnNode:true})">进入产品经理二审</button>
+        </div>
+          </div>`;
+        } else if (summaryStatus === "RUNNING") {
+          summaryBlock = `<div class="tu"><div class="tu-hd"><span class="name">汇总初审评审书</span><span class="tag tag-run">生成中</span></div></div>`;
+        } else if (summaryStatus === "SUCCEEDED") {
+          summaryBlock = `<div class="tu">
+            <div class="tu-hd"><span class="name">汇总初审评审书</span><span class="tag tag-ok">已完成</span></div>
+            <div class="tu-actions">
+              <a class="doc-link" href="javascript:void(0)" onclick="openDoc('review_summary')">打开</a>
+              <button type="button" class="btn btn-sm" onclick="enterPmSecond({stayOnNode:true})">进入产品经理二审</button>
+      </div>
+          </div>`;
+        }
+      }
+
+      let flowNote = "";
+      if (isGenPrd) {
+        flowNote = `<div class="flow-note">
+            <b>生成需求分析 · 两段式</b><br />
+            ① 有不确定 → 先问题 JSON → 人确认并<strong>归档 Wiki</strong> → 再写《产品需求说明书》<br />
+            ② 说明书齐后可选启动架构/UI 设计；<strong>两边都完成后一并</strong>开 PRD/架构/UI 评审
+          </div>`;
+      } else if (isDesign || isDownstream || isCoding || isIntTest) {
+        const doc = s.id === "gen_ui" ? "UI设计.html"
+          : s.id === "gen_detail" ? "详细设计文档"
+          : s.id === "gen_cases" ? "需求测试用例"
+          : s.id === "gen_coding" ? "编码完成报告"
+          : s.id === "gen_int_test" ? "集成测试报告"
+          : "架构设计文档";
+        const confirmDoc = s.id === "gen_ui" ? "UI设计-确认-r1.md"
+          : s.id === "gen_detail" ? "详细设计-确认-r1.md"
+          : s.id === "gen_cases" ? "测试用例-确认-r1.md"
+          : s.id === "gen_coding" ? "编码-确认-r1.md"
+          : s.id === "gen_int_test" ? "集成测试-确认-r1.md"
+          : "架构设计文档-确认-r1.md";
+        const who = s.id === "gen_ui" ? "UI设计师"
+          : s.id === "gen_detail" || s.id === "gen_coding" ? "研发"
+          : s.id === "gen_cases" || s.id === "gen_int_test" ? "测试"
+          : "架构师";
+        const repoNote = (isDownstream || isCoding || isIntTest)
+          ? (isIntTest
+            ? "<br />③ <strong>测试仓库</strong> + 《需求测试用例》可自动化子集"
+            : "<br />③ 本节点<strong>支持代码仓库</strong>")
+          : "";
+        const extraNote = isCoding
+          ? "<br />依据<strong>详细设计</strong>实现；编码阶段同步写可自动化用例；完成后进集成测试。"
+          : isIntTest
+            ? "<br />按可自动化用例编码/补齐并覆盖跑通本需求；通过后输出《集成测试报告》。"
+            : "";
+        flowNote = `<div class="flow-note">
+            <b>${escapeHtml(s.name)} · 两段式</b><br />
+            ① 有不确定 → <strong>优先</strong>问题列表 JSON → ${who}确认；<strong>问题+确认写入 Wiki</strong>（如 <code>…/${escapeHtml(confirmDoc)}</code>）<br />
+            ② 确认后无问题 → 再输出${s.id === "gen_ui" ? " HTML " : "《"}${escapeHtml(doc)}${s.id === "gen_ui" ? "" : "》"}${repoNote}${extraNote}
+          </div>`;
+      } else if (s.flowKind === "multi_review") {
+        flowNote = `<div class="flow-note">
+            <b>${escapeHtml(s.name)} · 多岗两段式</b>（三轨评审可并行）<br />
+            各岗位独立：有不确定 → 问题 JSON → 本岗确认并<strong>归档 Wiki</strong> → 再输出本岗评审书<br />
+            <b>本轨</b>各岗 Agent 全部写完 → <b>立刻</b>本轨合并 → 进入「文档修订」由修订岗位再次确认是否修改
+          </div>`;
+      } else if (isDocRevise) {
+        flowNote = `<div class="flow-note">
+            <b>文档修订 · 修订 Agent 任务单元</b><br />
+            岗位：PRD→产品经理；架构→架构师；UI→UI设计师。<br />
+            交互：一开始仅「确认问题项」→ 本岗确认勾选 → <strong>确认后自动执行修订</strong>；不需改则直接结束该 Agent。<br />
+            设计侧修订齐 → 详设+用例；详设/用例修订齐 → 开发编码 → 集成测试 → 结束
+          </div>`;
+      } else {
+        flowNote = `<div class="flow-note">
+            <b>单 Agent 两段式（提示词约定）</b><br />
+            ① 先只输出确认 JSON → 有则暂停 → 人展开确认；<strong>问题+确认归档 Wiki</strong><br />
+            ② <strong>确认提交后自动继续</strong>按模板写文档（无需再点一次）；无不确定时可 phase=ok 直接写书
+          </div>`;
+      }
+
       return `<div class="task-units">
-        <div class="lab">任务单元（本节点需两个 Agent 都完成才离开 AI 初审）</div>
+        ${flowNote}
+        <div class="lab">任务单元</div>
         ${cards}
+        ${summaryBlock}
       </div>`;
+    }
+
+    function renderInlineConfirm(stepId, t) {
+      // 复用精简版两类确认（演示共用 gateState）
+      const cHtml = gateState.confirmed.map((it) => {
+        return `<div class="rv-card ${it.decision === "agree" ? "done-agree" : it.decision === "disagree" ? "done-disagree" : ""}">
+          <div class="rv-hd"><span class="id">#${it.id}</span><span class="desc">${escapeHtml(it.title)}</span></div>
+          <div class="rv-meta">建议：${escapeHtml(it.suggestions)} · <span class="rec">推荐 ${escapeHtml(it.recommend)}</span></div>
+          <div class="rv-actions">
+            <button type="button" class="btn btn-sm ${it.decision === "agree" ? "chip-on" : ""}" onclick="setConfirmDecision('${it.id}','agree')">同意</button>
+            <button type="button" class="btn btn-sm ${it.decision === "disagree" ? "chip-on" : ""}" onclick="setConfirmDecision('${it.id}','disagree')">不同意</button>
+    </div>
+          ${it.decision === "disagree" ? `<div class="rv-extra"><label>不同意意见</label><textarea oninput="onDisagreeInput('${it.id}', this.value)">${escapeHtml(it.disagreeText)}</textarea></div>` : ""}
+        </div>`;
+      }).join("");
+      const sHtml = gateState.suspected.map((it) => {
+        return `<div class="rv-card ${it.answer.trim() ? "done-answered" : ""}">
+          <div class="rv-hd"><span class="id">${it.id}</span><span class="desc">${escapeHtml(it.title)}</span><span class="tag tag-info">开放问题</span></div>
+          <div class="rv-extra"><label>人类解答（必填）</label>
+            <textarea oninput="onSuspectAnswer('${it.id}', this.value)" placeholder="解答后写入确认 JSON…">${escapeHtml(it.answer)}</textarea>
+      </div>
+        </div>`;
+      }).join("");
+      return `
+        <div class="note" style="margin-bottom:8px">对照 Agent 阶段1 JSON：一类 findings 同意/不同意；二类 openQuestions 必答。提交后人确认 JSON 回灌，再写评审书。</div>
+        <div class="tu-actions" style="margin-bottom:8px">
+          <button type="button" class="link-btn" onclick="openDoc('${t.pauseJsonKey}')">查看 Agent 暂停 JSON</button>
+      </div>
+        <h5><span class="tag tag-warn">一类</span> findings</h5>${cHtml}
+        <h5><span class="tag tag-info">二类</span> openQuestions</h5>${sHtml}
+        <div class="gate-actions" style="margin-top:8px">
+          <button type="button" class="btn btn-primary btn-sm" onclick="onSubmitUnitConfirm('${stepId}','${t.id}')">提交确认并继续</button>
+        </div>`;
+    }
+
+    function toggleUnitConfirm(tid) {
+      expandedConfirm = expandedConfirm === tid ? null : tid;
+      activeTaskId = tid;
+      render();
     }
 
     function focusTask(tid) {
@@ -1141,7 +2944,9 @@
       const d = DOCS[key];
       if (!d) return;
       document.getElementById("drawerTitle").textContent = d.title;
-      document.getElementById("drawerSub").textContent = "只读预览 · Mock 样例";
+      document.getElementById("drawerSub").textContent = d.path
+        ? ("路径 · " + d.path)
+        : "只读预览 · Mock 样例";
       document.getElementById("drawerBody").textContent = d.body;
       document.getElementById("mask").classList.add("show");
       document.getElementById("drawer").classList.add("open");
@@ -1200,6 +3005,333 @@
       ]
     };
 
+    /** 业务「建议做」= 通过；技术「可做」= 通过。其余暂定（人可手动通过）。 */
+    function isBizPass(verdict) {
+      return verdict === "建议做";
+    }
+    function isTechPass(verdict) {
+      return verdict === "可做";
+    }
+
+    function getPreReviewTasks() {
+      const pre = steps.find((x) => x.id === "ai_pre");
+      return pre && pre.tasks ? pre.tasks : [];
+    }
+
+    function getBizTechVerdicts() {
+      const tasks = getPreReviewTasks();
+      const biz = tasks.find((t) => t.id === "pre_biz") || {};
+      const tech = tasks.find((t) => t.id === "pre_tech") || {};
+      return {
+        biz: {
+          verdict: biz.verdict || "—",
+          pass: biz.verdictPass === true || isBizPass(biz.verdict),
+          reason: biz.verdictReason || "",
+          docKey: "review_biz"
+        },
+        tech: {
+          verdict: tech.verdict || "—",
+          pass: tech.verdictPass === true || isTechPass(tech.verdict),
+          reason: tech.verdictReason || "",
+          docKey: "review_tech"
+        }
+      };
+    }
+
+    function bothReviewsPass() {
+      const v = getBizTechVerdicts();
+      return v.biz.pass && v.tech.pass;
+    }
+
+    function pm2CardClass(pass, verdict) {
+      if (pass) return "pass";
+      if (verdict === "建议不做" || verdict === "不可做") return "fail";
+      return "hold";
+    }
+
+    function renderPmSecondResultsReadonly() {
+      const v = getBizTechVerdicts();
+      return `<div class="pm2-grid">
+        <div class="pm2-card ${pm2CardClass(v.biz.pass, v.biz.verdict)}">
+          <div class="pm2-title">业务评审 <span class="tag ${v.biz.pass ? "tag-ok" : "tag-warn"}">${v.biz.pass ? "通过" : "未通过"}</span></div>
+          <div class="pm2-verdict">${escapeHtml(v.biz.verdict)}</div>
+          <div class="pm2-reason">${escapeHtml(v.biz.reason || "—")}</div>
+          <button type="button" class="link-btn" onclick="openDoc('review_biz')">打开业务评估评审书.md</button>
+        </div>
+        <div class="pm2-card ${pm2CardClass(v.tech.pass, v.tech.verdict)}">
+          <div class="pm2-title">技术评审 <span class="tag ${v.tech.pass ? "tag-ok" : "tag-warn"}">${v.tech.pass ? "通过" : "未通过"}</span></div>
+          <div class="pm2-verdict">${escapeHtml(v.tech.verdict)}</div>
+          <div class="pm2-reason">${escapeHtml(v.tech.reason || "—")}</div>
+          <button type="button" class="link-btn" onclick="openDoc('review_tech')">打开技术评估评审书.md</button>
+        </div>
+      </div>`;
+    }
+
+    function renderPmSecondReleaseForm(s) {
+      const opts = PRODUCT_VERSIONS.map((v) =>
+        `<option value="${v.id}" ${s.releaseVersionId === v.id ? "selected" : ""}>${escapeHtml(v.version)}（${escapeHtml(v.status)} · 计划 ${escapeHtml(v.planReleaseAt.replace("T", " "))}）</option>`
+      ).join("");
+      return `<div class="pm2-form">
+        <div>
+          <label class="req">发布版本</label>
+          <select id="pm2VersionId" onchange="onPm2VersionChange(this.value)">
+            <option value="">请选择产品版本号</option>
+            ${opts}
+          </select>
+      </div>
+        <div>
+          <label class="req">发布时间</label>
+          <input type="datetime-local" id="pm2ReleaseAt" value="${escapeHtml(s.releaseAt || "")}"
+            oninput="onPm2ReleaseInput('releaseAt', this.value)" />
+      </div>
+      </div>`;
+    }
+
+    function onPm2VersionChange(versionId) {
+      const s = steps.find((x) => x.id === "pm_second");
+      if (!s) return;
+      s.releaseVersionId = versionId;
+      const ver = PRODUCT_VERSIONS.find((v) => v.id === versionId);
+      if (ver) {
+        s.releaseVersion = ver.version;
+        s.releaseAt = ver.planReleaseAt;
+        const atEl = document.getElementById("pm2ReleaseAt");
+        if (atEl) atEl.value = ver.planReleaseAt;
+      } else {
+        s.releaseVersion = "";
+      }
+    }
+
+    function onPm2ReleaseInput(field, val) {
+      const s = steps.find((x) => x.id === "pm_second");
+      if (!s) return;
+      s[field] = val;
+    }
+
+    function syncPmSecondForm(s) {
+      const idEl = document.getElementById("pm2VersionId");
+      const atEl = document.getElementById("pm2ReleaseAt");
+      if (idEl) s.releaseVersionId = idEl.value;
+      if (atEl) s.releaseAt = atEl.value;
+      const ver = PRODUCT_VERSIONS.find((v) => v.id === s.releaseVersionId);
+      s.releaseVersion = ver ? ver.version : "";
+    }
+
+    function validatePmSecondRelease(s) {
+      if (!String(s.releaseVersionId || "").trim()) return "请选择产品的发布版本号";
+      if (!String(s.releaseAt || "").trim()) return "请指定发布时间";
+      return null;
+    }
+
+    function renderPmSecondPanel(s) {
+      const v = getBizTechVerdicts();
+      const both = v.biz.pass && v.tech.pass;
+      const banner = both
+        ? `<div class="pm2-banner auto">双侧结论均为<strong>通过</strong>。请选择产品<strong>发布版本</strong>并确认<strong>发布时间</strong>，再选择放行方式。</div>`
+        : `<div class="pm2-banner hold">双侧结论<strong>未齐通过</strong> → 二审<strong>暂定</strong>。仍须选版本/时间；确认后仍可放行。</div>`;
+      return `
+        <div class="gate">
+          <h4>产品经理二审</h4>
+          <div class="note">对照双侧评审书与结论；发布版本从<strong>当前产品已配置的版本号</strong>中选择。<br />
+            <b>通过</b>：需求进入「已入计划」，流水线在此挂起。<br />
+            <b>通过并投入研发</b>：写入计划后继续启动下一步（如生成需求分析）。</div>
+          ${banner}
+          ${renderPmSecondResultsReadonly()}
+          ${renderPmSecondReleaseForm(s)}
+          <div class="gate-actions">
+            <span class="muted">${both ? "结论已齐通过" : "暂定 · 可人工放行"}</span>
+            <span class="grow"></span>
+            <button type="button" class="btn" onclick="onPassPmSecond('park')">通过</button>
+            <button type="button" class="btn btn-primary" onclick="onPassPmSecond('continue')">通过并投入研发</button>
+    </div>
+        </div>`;
+    }
+
+    function enterPmSecond(opts) {
+      const stay = opts && opts.stayOnNode;
+      const pre = steps.find((x) => x.id === "ai_pre");
+      if (pre && pre.tasks && pre.tasks.every((t) => t.docWritten)) {
+        if (summaryStatus === "PENDING") summaryStatus = "SUCCEEDED";
+        syncAiPreStatus(pre);
+        pre.status = "SUCCEEDED";
+      }
+      const next = steps.find((x) => x.id === "pm_second");
+      if (!next) return;
+      selectedId = next.id;
+      next.status = "WAITING_HUMAN";
+      next.decision = null;
+      next.releaseVersionId = next.releaseVersionId || "";
+      next.releaseVersion = next.releaseVersion || "";
+      next.releaseAt = next.releaseAt || "";
+      next.passMode = null;
+      if (bothReviewsPass()) {
+        next.holdReason = null;
+        instanceStatus = "WAITING_HUMAN";
+        toast("产品经理二审：请选择产品版本并确认发布时间");
+      } else {
+        next.holdReason = "双侧结论未齐通过";
+        instanceStatus = "WAITING_HUMAN";
+        toast("产品经理二审：暂定 · 选版本后仍可放行");
+      }
+      if (!stay) { /* keep on pm_second */ }
+      render();
+    }
+
+    function unlockNextAfter(from, opts) {
+      const selectNext = !opts || opts.selectNext !== false;
+      const idx = steps.findIndex((x) => x.id === from.id);
+      const next = steps[idx + 1];
+      if (!next) {
+        instanceStatus = "DONE";
+        return;
+      }
+      if (next.kind === "human") {
+        next.status = "WAITING_HUMAN";
+        instanceStatus = "WAITING_HUMAN";
+      } else if (isAi(next)) {
+        next.status = "WAITING_TRIGGER";
+        instanceStatus = "RUNNING";
+      } else {
+        next.status = "SUCCEEDED";
+        instanceStatus = "DONE";
+      }
+      if (selectNext) selectedId = next.id;
+    }
+
+    function advanceAfterPmSecond(from) {
+      unlockNextAfter(from, { selectNext: true });
+    }
+
+    function onPassPmSecond(mode) {
+      const s = steps.find((x) => x.id === "pm_second");
+      if (!s || s.status !== "WAITING_HUMAN") return;
+      if (!canTriggerRole("PM")) {
+        toast("仅产品经理可二审通过");
+        return;
+      }
+      syncPmSecondForm(s);
+      const err = validatePmSecondRelease(s);
+      if (err) {
+        toast(err);
+        return;
+      }
+      const both = bothReviewsPass();
+      s.status = "SUCCEEDED";
+      s.decision = both ? "ready_pass" : "manual_pass";
+      s.passMode = mode === "continue" ? "continue" : "park";
+      if (s.passMode === "park") {
+        reqBizStatus = "PLANNED";
+        instanceStatus = "PARKED";
+        selectedId = s.id;
+        toast("已通过 · 需求进入「已入计划」· " + s.releaseVersion + " · 流水线挂起");
+      } else {
+        reqBizStatus = "IN_DEV";
+        advanceAfterPmSecond(s);
+        toast("已通过并投入研发 · " + s.releaseVersion + " → " + (selectedStep() ? selectedStep().name : "下一步"));
+      }
+      render();
+    }
+
+    /** 演示：跳过 AI 初审，直接进二审；bothPass=true 双侧通过自动过，false 暂定可点通过 */
+    function demoPmSecond(bothPass) {
+      const pre = steps.find((x) => x.id === "ai_pre");
+      if (!pre || !pre.tasks) return;
+      pre.tasks.forEach((t) => {
+        t.status = "CONFIRMED";
+        t.docWritten = true;
+        if (t.id === "pre_biz") {
+          if (bothPass) {
+            t.verdict = "建议做";
+            t.verdictPass = true;
+            t.verdictReason = "痛点明确；与路线图对齐";
+            DOCS.review_biz.body = DOCS.review_biz.body.replace(/建议不做|建议暂缓|信息不足|建议做/g, "建议做");
+          } else {
+            t.verdict = "建议暂缓";
+            t.verdictPass = false;
+            t.verdictReason = "价值假设仍偏弱，建议先小范围验证";
+            DOCS.review_biz.body = "# 原始需求业务评估报告\n\n| AI业务评估结论 | 建议暂缓 |\n\n## 五、业务侧结论\n\n| 业务侧结论 | 建议暂缓 |\n| 理由 | 价值假设仍偏弱 |\n";
+          }
+        }
+        if (t.id === "pre_tech") {
+          t.verdict = "可做";
+          t.verdictPass = true;
+          t.verdictReason = "现有架构可支撑；工作量中等";
+        }
+      });
+      summaryStatus = "SUCCEEDED";
+      reqBizStatus = "REVIEWING";
+      syncAiPreStatus(pre);
+      pre.status = "SUCCEEDED";
+      steps.forEach((s) => {
+        if (s.id === "pm_second") {
+          s.status = "PENDING";
+          s.decision = null;
+          s.passMode = null;
+          if (bothPass) {
+            s.releaseVersionId = "v-2026-11";
+            s.releaseVersion = "2026.11";
+            s.releaseAt = "2026-11-15T18:00";
+          } else {
+            s.releaseVersionId = "";
+            s.releaseVersion = "";
+            s.releaseAt = "";
+          }
+          return;
+        }
+        if (s.id !== "pm_first" && s.id !== "ai_pre") {
+          s.status = "PENDING";
+        }
+      });
+      enterPmSecond({ stayOnNode: true });
+    }
+
+    /** 演示：跳到生成需求分析（两段式：先问题 JSON） */
+    function demoGenPrd() {
+      const pre = steps.find((x) => x.id === "ai_pre");
+      const pm2 = steps.find((x) => x.id === "pm_second");
+      const gen = steps.find((x) => x.id === "gen_prd");
+      if (!gen || !gen.tasks) return;
+      if (pre && pre.tasks) {
+        pre.tasks.forEach((t) => {
+          t.status = "CONFIRMED";
+          t.docWritten = true;
+          if (t.id === "pre_biz") { t.verdict = "建议做"; t.verdictPass = true; }
+          if (t.id === "pre_tech") { t.verdict = "可做"; t.verdictPass = true; }
+        });
+        summaryStatus = "SUCCEEDED";
+        syncAiPreStatus(pre);
+        pre.status = "SUCCEEDED";
+      }
+      if (pm2) {
+        pm2.status = "SUCCEEDED";
+        pm2.decision = "ready_pass";
+        pm2.passMode = "continue";
+        pm2.releaseVersionId = "v-2026-11";
+        pm2.releaseVersion = "2026.11";
+        pm2.releaseAt = "2026-11-15T18:00";
+      }
+      reqBizStatus = "IN_DEV";
+      gen.status = "WAITING_TRIGGER";
+      gen.outputs = [];
+      gen.branchChoice = null;
+      gen._draftNeedArch = false;
+      gen._draftNeedUi = false;
+      gen.tasks.forEach((t) => {
+        t.status = "WAITING_TRIGGER";
+        t.docWritten = false;
+        t.confirmJson = null;
+      });
+      steps.forEach((s) => {
+        if (["gen_prd", "pm_first", "ai_pre", "pm_second"].includes(s.id)) return;
+        s.status = "PENDING";
+      });
+      selectedId = "gen_prd";
+      activeTaskId = gen.tasks[0].id;
+      instanceStatus = "RUNNING";
+      toast("生成需求分析：写说明书后可选启动架构/UI 设计，或直进 PRD 评审");
+      render();
+    }
+
     function renderGatePanel(s) {
       const cCards = gateState.confirmed.map((it) => {
         const cardCls = it.decision === "agree" ? "done-agree"
@@ -1215,7 +3347,7 @@
             <span class="id">#${it.id}</span>
             <span class="desc">${escapeHtml(it.title)}</span>
             <span class="tag tag-warn">${it.severity}</span>
-          </div>
+    </div>
           <div class="rv-meta">
             建议：${escapeHtml(it.suggestions)}<br />
             <span class="rec">推荐采用：${escapeHtml(it.recommend)}</span>
@@ -1255,7 +3387,7 @@
             <b>一类 · 确认项</b>（问题清单 / 业务风险等）：AI 已认定有问题并给出建议 → 你只需<strong>同意采纳推荐</strong>，或<strong>不同意并写出意见</strong>。<br />
             <b>二类 · 疑似项</b>（疑似问题）：AI 不确定 → 只抛出问题，必须由人类<strong>解答</strong>。<br />
             全部处理完后点「提交确认」：有「同意」项则进 AI 整改；仅不同意 + 疑似解答则直接下一步。顶栏「取消」才结束整条流水线。
-          </div>
+  </div>
           <h5><span class="tag tag-warn">一类</span> 问题清单 / 业务风险（确认项）</h5>
           ${cCards || "<p class='muted'>本步无确认项</p>"}
           <h5><span class="tag tag-info">二类</span> 疑似问题（需人类解答）</h5>
@@ -1291,14 +3423,7 @@
       if (!it) return;
       it.decision = decision;
       if (decision === "agree") it.disagreeText = "";
-      // 局部重绘该卡，保留其他输入
-      const s = selectedStep();
-      if (s) {
-        const box = document.getElementById("detail");
-        // 仅重绘 gate：简单整页 detail 重绘
-        renderDetail(s);
-      }
-      refreshGateSummary();
+      render();
     }
 
     function onDisagreeInput(id, val) {
@@ -1426,28 +3551,172 @@
       const s = steps.find((x) => x.id === stepId);
       if (!s || !s.tasks) return;
       const t = s.tasks.find((x) => x.id === taskId);
-      if (!t || t.status === "SUCCEEDED") return;
-      t.status = "SUCCEEDED";
+      if (!t || t.status === "WAITING_CONFIRM" || t.status === "CONFIRMED" || t.status === "WAITING_SELECT" || t.status === "SUCCEEDED") return;
+      if (s.flowKind === "doc_revise") {
+        publishTrackRevise(t);
+        activeTaskId = taskId;
+        syncAiPreStatus(s);
+        instanceStatus = anyTrackMergeWaiting() ? "WAITING_HUMAN" : "RUNNING";
+        const n = (t.selectedFixIds || []).length;
+        toast(t.name + "：已按 " + n + " 项勾选问题修订并发布");
+        tryEnterNextAfterRevises(s.id === "doc_revise_dt" ? "downstream" : "design");
+        render();
+        return;
+      }
+      t.status = "WAITING_CONFIRM";
+      t.docWritten = false;
+      expandedConfirm = taskId;
+      activeTaskId = taskId;
       syncAiPreStatus(s);
-      if (s.status === "SUCCEEDED") {
-        const idx = steps.findIndex((x) => x.id === stepId);
-        const next = steps[idx + 1];
-        if (next) {
-          if (next.kind === "human") {
-            next.status = "WAITING_HUMAN";
-            instanceStatus = "WAITING_HUMAN";
-          } else if (isAi(next)) {
-            next.status = "WAITING_TRIGGER";
-            instanceStatus = "RUNNING";
-          }
-          selectedId = next.id;
-          toast("双 Agent 均完成 → " + next.name);
-        }
-      } else {
-        toast(t.name + " 完成，等待另一任务单元");
+      instanceStatus = "WAITING_HUMAN";
+      toast(t.name + " 阶段1：已输出暂停 JSON，任务暂停等人确认");
+      render();
+    }
+
+    function onSubmitUnitConfirm(stepId, taskId) {
+      const s = steps.find((x) => x.id === stepId);
+      if (!s || !s.tasks) return;
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t || t.status !== "WAITING_CONFIRM") return;
+      if (!canTriggerRole(t.ownerRole)) {
+        toast("仅本岗可提交确认");
+        return;
+      }
+      const err = validateGate();
+      if (err) {
+        toast(err);
+        return;
+      }
+      t.status = "CONFIRMED";
+      t.docWritten = false;
+      t.confirmJson = {
+        unit: t.id,
+        findings: gateState.confirmed.map((x) => ({
+          id: x.id,
+          decision: x.decision,
+          adopt: x.decision === "agree" ? x.recommend : undefined,
+          disagreeText: x.decision === "disagree" ? x.disagreeText : undefined
+        })),
+        openQuestions: gateState.suspected.map((x) => ({ id: x.id, answer: x.answer }))
+      };
+      // 本岗确认（含产品经理）→ 归档 Wiki
+      const archiveName = t.writeLabel
+        ? (t.writeLabel.replace(/\.(md|html)$/i, "") + "-确认-r1.md")
+        : s.id === "gen_prd" ? "产品需求说明书-确认-r1.md"
+        : s.id === "gen_arch" ? "架构设计文档-确认-r1.md"
+        : s.id === "gen_ui" ? "UI设计-确认-r1.md"
+        : s.id === "gen_detail" ? "详细设计-确认-r1.md"
+        : s.id === "gen_cases" ? "测试用例-确认-r1.md"
+        : s.id === "gen_coding" ? "编码-确认-r1.md"
+        : s.id === "gen_int_test" ? "集成测试-确认-r1.md"
+        : t.id === "pre_tech" ? "原始需求技术评估-确认-r1.md"
+        : "原始需求业务评估-确认-r1.md";
+      const archivePath = WIKI_ROOT + "/" + archiveName;
+      DOCS.confirm_json = {
+        title: archiveName,
+        path: archivePath,
+        body: "# 确认归档\n\n## AI 本轮问题\n（见阶段1 暂停 JSON）\n\n## 本岗确认结果\n```json\n"
+          + JSON.stringify(t.confirmJson, null, 2)
+          + "\n```\n"
+      };
+      t.confirmArchiveKey = "confirm_json";
+      if (!s.contexts) s.contexts = [];
+      if (!s.contexts.includes(archivePath)) s.contexts = s.contexts.concat([archivePath]);
+      expandedConfirm = null;
+      gateState.confirmed.forEach((x) => { x.decision = null; x.disagreeText = ""; });
+      gateState.suspected.forEach((x) => { x.answer = ""; });
+      syncAiPreStatus(s);
+      instanceStatus = "RUNNING";
+      const nextWrite = t.writeLabel || "目标文档";
+      toast("确认已写入 Wiki：" + archivePath + " → 自动继续写" + nextWrite);
+      render();
+      // 确认提交后直接继续阶段2，无需再点「继续写」
+      setTimeout(() => onWriteReviewDoc(stepId, taskId), 200);
+    }
+
+    function onWriteReviewDoc(stepId, taskId) {
+      const s = steps.find((x) => x.id === stepId);
+      if (!s || !s.tasks) return;
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t || t.status !== "CONFIRMED" || t.docWritten) return;
+      if (!canTriggerRole(t.ownerRole)) {
+        toast("仅本岗可继续写文档");
+        return;
+      }
+      t.docWritten = true;
+      if (t.id === "pre_biz" && !t.verdict) {
+        t.verdict = "建议做";
+        t.verdictPass = true;
+        t.verdictReason = "痛点明确；与路线图对齐；前置条件已确认";
+      }
+      if (t.id === "pre_tech" && !t.verdict) {
+        t.verdict = "可做";
+        t.verdictPass = true;
+        t.verdictReason = "现有架构可支撑；工作量中等";
+      }
+      syncAiPreStatus(s);
+      const docName = t.writeLabel || "目标文档";
+      toast(t.name + " 阶段2：已写出《" + docName + "》");
+      if (s.id === "ai_pre" && s.tasks.every((x) => x.docWritten)) {
         instanceStatus = "RUNNING";
+        toast("两侧评审书齐全，可汇总或进入产品经理二审");
+      } else if (s.id === "gen_prd" && s.tasks.every((x) => x.docWritten)) {
+        s.branchChoice = null;
+        s.status = "WAITING_BRANCH";
+        instanceStatus = "WAITING_HUMAN";
+        selectedId = s.id;
+        toast("产品需求说明书已出 → 请选择是否启动架构设计 / UI 设计");
+      } else if ((s.id === "gen_arch" || s.id === "gen_ui") && s.tasks.every((x) => x.docWritten)) {
+        instanceStatus = "RUNNING";
+        if (!tryEnterParallelReviews()) {
+          const otherId = s.id === "gen_arch" ? "gen_ui" : "gen_arch";
+          const other = steps.find((x) => x.id === otherId);
+          if (other && other.status === "WAITING_TRIGGER") {
+            selectedId = other.id;
+            toast(docName + "已出 → 请继续「" + other.name + "」（两边齐后再一起开评审）");
+          }
+        }
+      } else if (s.flowKind === "multi_review" && s.tasks.every((x) => x.docWritten)) {
+        s.status = "SUCCEEDED";
+        triggerTrackMerge(s.id);
+      } else if (s.flowKind === "gen_downstream" && s.tasks.every((x) => x.docWritten)) {
+        s.status = "SUCCEEDED";
+        instanceStatus = "RUNNING";
+        if (!checkDetailCasesDone()) {
+          const otherId = s.id === "gen_detail" ? "gen_cases" : "gen_detail";
+          const other = steps.find((x) => x.id === otherId);
+          if (other && other.status === "WAITING_TRIGGER") {
+            selectedId = other.id;
+            toast(docName + "已出 → 请继续「" + other.name + "」");
+          }
+        }
+      } else if ((s.flowKind === "gen_coding" || s.id === "gen_coding") && s.tasks.every((x) => x.docWritten)) {
+        s.status = "SUCCEEDED";
+        checkCodingDone();
+      } else if ((s.flowKind === "gen_int_test" || s.id === "gen_int_test") && s.tasks.every((x) => x.docWritten)) {
+        s.status = "SUCCEEDED";
+        checkIntTestDone();
       }
       render();
+    }
+
+    function onRunSummary(stepId) {
+      const s = steps.find((x) => x.id === stepId);
+      if (!s || !s.tasks.every((t) => t.docWritten)) {
+        toast("请先让各单元确认并写完评审书");
+        return;
+      }
+      summaryStatus = "RUNNING";
+      activeTaskId = null;
+      syncAiPreStatus(s);
+      instanceStatus = "RUNNING";
+      toast("LLM 汇总评审书中…");
+      render();
+      setTimeout(() => {
+        summaryStatus = "SUCCEEDED";
+        syncAiPreStatus(s);
+        enterPmSecond({ stayOnNode: true });
+      }, 900);
     }
 
     function onRunAi(id) {
@@ -1465,7 +3734,9 @@
       const s = steps.find((x) => x.id === id);
       if (!s || s.status === "SUCCEEDED") return;
       s.status = "SUCCEEDED";
-      if (!s.outputs.length) s.outputs = ["prd"];
+      if (s.id === "gen_arch") s.outputs = ["arch"];
+      else if (s.id === "gen_ui") s.outputs = ["ui_design"];
+      else if (!s.outputs.length) s.outputs = ["prd"];
 
       if (s.kind === "ai_revise") {
         const gateId = s.id.replace(/^revise_after_/, "").replace(/_r\d+$/, "");
@@ -1477,6 +3748,26 @@
           selectedId = gate.id;
           instanceStatus = "WAITING_HUMAN";
           toast("整改完成 → 回到「" + gate.name + "」再审（r" + gate.round + "）");
+        }
+      } else if (s.id === "gen_arch" || s.id === "gen_ui") {
+        toast(s.name + " 已完成");
+        if (!tryEnterParallelReviews()) {
+          const otherId = s.id === "gen_arch" ? "gen_ui" : "gen_arch";
+          const other = steps.find((x) => x.id === otherId);
+          if (other && other.status === "WAITING_TRIGGER") {
+            selectedId = other.id;
+            instanceStatus = "RUNNING";
+          }
+        }
+      } else if (s.id === "gen_detail" || s.id === "gen_cases") {
+        toast(s.name + " 已完成");
+        if (!checkDetailCasesDone()) {
+          const otherId = s.id === "gen_detail" ? "gen_cases" : "gen_detail";
+          const other = steps.find((x) => x.id === otherId);
+          if (other && other.status === "WAITING_TRIGGER") {
+            selectedId = other.id;
+            instanceStatus = "RUNNING";
+          }
         }
       } else {
         const idx = steps.findIndex((x) => x.id === id);
@@ -1508,9 +3799,21 @@
       render();
     }
 
+    function setScreensCollapsed(collapsed) {
+      const bar = document.getElementById("screensBar");
+      const show = document.getElementById("screensShow");
+      if (!bar || !show) return;
+      bar.classList.toggle("collapsed", collapsed);
+      show.classList.toggle("visible", collapsed);
+      try { localStorage.setItem("dap-mock-screens-collapsed", collapsed ? "1" : "0"); } catch (e) { /* ignore */ }
+    }
+
     seedSteps();
     // 默认展示工作台，便于打开文件即看主场景
     openWorkbench();
+    try {
+      if (localStorage.getItem("dap-mock-screens-collapsed") === "1") setScreensCollapsed(true);
+    } catch (e) { /* ignore */ }
   </script>
 </body>
 </html>

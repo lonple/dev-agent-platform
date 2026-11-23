@@ -94,17 +94,6 @@ public class AgentFsToolService {
         vo.setWorkspaceId(session.getWorkspaceId());
         vo.setOutputDirNodeId(session.getOutputDirNodeId());
         vo.setOutputDirLabel(resolveOutputDirLabel(session));
-        vo.setOutputWikiDirNodeId(session.getOutputWikiDirNodeId());
-        if (session.getOutputWikiDirNodeId() != null) {
-            try {
-                SysWikiNode wd = wikiNodeMapper.selectById(session.getOutputWikiDirNodeId());
-                if (wd != null) {
-                    vo.setOutputWikiDirPath(wikiFsService.buildDisplayPath(wd));
-                }
-            } catch (Exception ignored) {
-                // ignore
-            }
-        }
 
         if (StringUtils.hasText(session.getTaskTypeCode())) {
             vo.setTaskTypeCode(session.getTaskTypeCode());
@@ -273,28 +262,10 @@ public class AgentFsToolService {
     public AgentWriteResultVO write(Long sessionId, String displayName, String content) {
         WbChatSession session = requireSession(sessionId);
         String name = normalizeMdName(displayName);
+        rejectMisusedConfirmWrite(session, name);
         String body = content == null ? "" : content;
 
-        // 流水线任务：输出写到 Wiki 目录
-        if (session.getOutputWikiDirNodeId() != null) {
-            SysWikiNode parent = wikiNodeMapper.selectById(session.getOutputWikiDirNodeId());
-            if (parent == null || !Objects.equals(parent.getTenantId(), session.getTenantId())
-                    || !WorkspaceNodeType.DIR.name().equals(parent.getNodeType())) {
-                throw new BizException("Wiki 输出目录无效");
-            }
-            Long nodeId = wikiFsService.upsertMarkdownFile(parent.getId(), name, body);
-            SysWikiNode file = wikiNodeMapper.selectById(nodeId);
-            AgentWriteResultVO vo = new AgentWriteResultVO();
-            vo.setWorkspaceId(session.getWorkspaceId());
-            vo.setNodeId(nodeId);
-            vo.setDisplayName(name);
-            vo.setDisplayPath(file != null ? wikiFsService.buildDisplayPath(file) : name);
-            vo.setVersionNo(1);
-            vo.setCreated(true);
-            return vo;
-        }
-
-        // 手动任务：仅个人空间
+        // 仅个人空间
         SysWorkspace ws = workspaceMapper.selectById(session.getWorkspaceId());
         if (ws == null || !Objects.equals(ws.getOwnerUserId(), session.getUserId())) {
             throw new BizException(403, "无权写入该工作空间");
@@ -452,35 +423,30 @@ public class AgentFsToolService {
                 }
             }
         }
-        // 流水线 Wiki 输出目录
-        if (session.getOutputWikiDirNodeId() != null) {
-            collectWikiFilesUnder(map, session.getOutputWikiDirNodeId(), "output");
-        } else {
-            // 手动任务：个人空间输出目录已有文件
-            SysWorkspace ws = workspaceMapper.selectById(session.getWorkspaceId());
-            if (ws != null) {
-                Long parentId = session.getOutputDirNodeId();
-                List<SysWorkspaceNode> outs = workspaceNodeMapper.selectList(new LambdaQueryWrapper<SysWorkspaceNode>()
-                        .eq(SysWorkspaceNode::getWorkspaceId, ws.getId())
-                        .eq(SysWorkspaceNode::getNodeType, WorkspaceNodeType.FILE.name()));
-                for (SysWorkspaceNode n : outs) {
-                    if (!isUnderOutput(n, parentId, ws.getId())) {
-                        continue;
-                    }
-                    AllowedFile f = new AllowedFile();
-                    f.source = "workspace";
-                    f.nodeId = n.getId();
-                    f.displayPath = buildWorkspaceDisplayPath(ws.getId(), n.getId());
-                    f.role = "output";
-                    try {
-                        Path p = workspaceFsService.resolveNodeAbsolutePath(ws, n);
-                        f.path = p;
-                        f.approxChars = Files.exists(p) ? (int) Math.min(Files.size(p), Integer.MAX_VALUE) : 0;
-                    } catch (Exception e) {
-                        f.approxChars = 0;
-                    }
-                    map.putIfAbsent(f.source + ":" + f.nodeId, f);
+        // 个人空间输出目录已有文件
+        SysWorkspace wsOut = workspaceMapper.selectById(session.getWorkspaceId());
+        if (wsOut != null) {
+            Long parentId = session.getOutputDirNodeId();
+            List<SysWorkspaceNode> outs = workspaceNodeMapper.selectList(new LambdaQueryWrapper<SysWorkspaceNode>()
+                    .eq(SysWorkspaceNode::getWorkspaceId, wsOut.getId())
+                    .eq(SysWorkspaceNode::getNodeType, WorkspaceNodeType.FILE.name()));
+            for (SysWorkspaceNode n : outs) {
+                if (!isUnderOutput(n, parentId, wsOut.getId())) {
+                    continue;
                 }
+                AllowedFile f = new AllowedFile();
+                f.source = "workspace";
+                f.nodeId = n.getId();
+                f.displayPath = buildWorkspaceDisplayPath(wsOut.getId(), n.getId());
+                f.role = "output";
+                try {
+                    Path p = workspaceFsService.resolveNodeAbsolutePath(wsOut, n);
+                    f.path = p;
+                    f.approxChars = Files.exists(p) ? (int) Math.min(Files.size(p), Integer.MAX_VALUE) : 0;
+                } catch (Exception e) {
+                    f.approxChars = 0;
+                }
+                map.putIfAbsent(f.source + ":" + f.nodeId, f);
             }
         }
         return new ArrayList<>(map.values());
@@ -649,10 +615,6 @@ public class AgentFsToolService {
     }
 
     private String resolveOutputDirLabel(WbChatSession session) {
-        if (session.getOutputWikiDirNodeId() != null) {
-            SysWikiNode w = wikiNodeMapper.selectById(session.getOutputWikiDirNodeId());
-            return w == null ? "（Wiki 输出目录）" : "wiki:" + wikiFsService.buildDisplayPath(w);
-        }
         if (session.getOutputDirNodeId() == null) {
             return "（个人空间根目录）";
         }
@@ -766,7 +728,31 @@ public class AgentFsToolService {
         }
     }
 
-    /** 输出文件名：允许 .md / .html；无扩展名默认 .md */
+    /**
+     * 拦截把「确认」误写成 JSON 交付物（如 #9136 写 问题分析-确认.json 后空结束）。
+     * 不确定应在对话输出 need_human_confirm；正式文档用标准 .md 名。
+     */
+    private void rejectMisusedConfirmWrite(WbChatSession session, String name) {
+        if (!StringUtils.hasText(name)) {
+            return;
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        boolean confirmLike = name.contains("确认");
+        boolean asJson = lower.endsWith(".json");
+        if (!confirmLike || !asJson) {
+            return;
+        }
+        String hint = "不确定时请在对话中输出 phase=need_human_confirm 的 JSON，不要 write_output 确认档 JSON。";
+        String task = session.getTaskTypeCode() == null ? "" : session.getTaskTypeCode().trim().toUpperCase(Locale.ROOT);
+        if ("GEN_ISSUE_ANALYSIS".equals(task)) {
+            hint += "正式产出 display_name 必须为「问题原因分析.md」。";
+        } else if (StringUtils.hasText(task) && task.startsWith("GEN_")) {
+            hint += "正式产出请使用流水线规定的标准 .md 文件名。";
+        }
+        throw new BizException(hint + " 当前拒绝：" + name);
+    }
+
+    /** 输出文件名：允许 .md / .html / .json；无扩展名默认 .md */
     private String normalizeMdName(String displayName) {
         if (!StringUtils.hasText(displayName)) {
             throw new BizException("请输入文件名");
@@ -780,11 +766,14 @@ public class AgentFsToolService {
             name = name.substring(slash + 1);
         }
         String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(".md") || lower.endsWith(".html") || lower.endsWith(".htm")) {
+        if (lower.endsWith(".md")
+                || lower.endsWith(".html")
+                || lower.endsWith(".htm")
+                || lower.endsWith(".json")) {
             return name;
         }
         if (name.contains(".")) {
-            throw new BizException("输出文件仅支持 .md 或 .html：" + name);
+            throw new BizException("输出文件仅支持 .md / .html / .json：" + name);
         }
         return name + ".md";
     }

@@ -48,3 +48,14 @@ export function updatePrompt(id: number, data: PromptSavePayload) {
 export function deletePrompt(id: number) {
   return request.delete<any, void>(`/prompts/${id}`)
 }
+
+export interface EnsurePreReviewResult {
+  created: string[]
+  skipped: string[]
+  missingPositions: string[]
+}
+
+/** 初始化流水线默认提示词；AI 初审两岗会覆盖更新正文 */
+export function ensurePreReviewPrompts() {
+  return request.post<any, EnsurePreReviewResult>('/prompts/ensure-pre-review')
+}

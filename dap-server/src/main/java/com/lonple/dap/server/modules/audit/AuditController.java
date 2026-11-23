@@ -3,6 +3,7 @@ package com.lonple.dap.server.modules.audit;
 import com.lonple.dap.server.common.ApiResponse;
 import com.lonple.dap.server.common.BizException;
 import com.lonple.dap.server.common.PageResult;
+import com.lonple.dap.server.modules.audit.dto.TokenUsageStatVO;
 import com.lonple.dap.server.modules.chat.es.ChatStepDocument;
 import com.lonple.dap.server.modules.chat.es.ChatStepEsService;
 import com.lonple.dap.server.security.RequirePermission;
@@ -12,6 +13,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 
 @RestController
@@ -20,6 +22,7 @@ import java.util.Objects;
 public class AuditController {
 
     private final ChatStepEsService chatStepEsService;
+    private final TokenUsageService tokenUsageService;
 
     @GetMapping("/chat-steps")
     @RequirePermission("audit:view")
@@ -31,8 +34,6 @@ public class AuditController {
             @RequestParam(required = false) Long sessionId,
             @RequestParam(required = false) String runId,
             @RequestParam(required = false) Long messageId,
-            @RequestParam(required = false) Long pipeInstanceId,
-            @RequestParam(required = false) Long pipeStepInstanceId,
             @RequestParam(required = false) Long requirementId,
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) String taskTypeCode,
@@ -42,8 +43,7 @@ public class AuditController {
         return ApiResponse.ok(chatStepEsService.search(
                 tenantId, page, size, from, to,
                 sessionId, runId, messageId,
-                pipeInstanceId, pipeStepInstanceId, requirementId,
-                userId, taskTypeCode, keyword, includeDetail));
+                requirementId, userId, taskTypeCode, keyword, includeDetail));
     }
 
     @GetMapping("/chat-steps/{eventId}")
@@ -54,5 +54,23 @@ public class AuditController {
             throw new BizException(404, "步骤日志不存在");
         }
         return ApiResponse.ok(doc);
+    }
+
+    @GetMapping("/token-usage/by-user")
+    @RequirePermission("audit:view")
+    public ApiResponse<List<TokenUsageStatVO>> tokenUsageByUser() {
+        return ApiResponse.ok(tokenUsageService.statsByUser());
+    }
+
+    @GetMapping("/token-usage/by-requirement-user")
+    @RequirePermission("audit:view")
+    public ApiResponse<List<TokenUsageStatVO>> tokenUsageByRequirementUser() {
+        return ApiResponse.ok(tokenUsageService.statsByRequirementUser());
+    }
+
+    @GetMapping("/token-usage/by-issue-user")
+    @RequirePermission("audit:view")
+    public ApiResponse<List<TokenUsageStatVO>> tokenUsageByIssueUser() {
+        return ApiResponse.ok(tokenUsageService.statsByIssueUser());
     }
 }

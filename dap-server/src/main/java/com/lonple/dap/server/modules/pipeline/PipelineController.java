@@ -1,108 +1,159 @@
 package com.lonple.dap.server.modules.pipeline;
 
 import com.lonple.dap.server.common.ApiResponse;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineAiPrepareVO;
+import com.lonple.dap.server.modules.pipeline.dto.CodingProgressVO;
+import com.lonple.dap.server.modules.pipeline.dto.PipelineConfirmRequest;
 import com.lonple.dap.server.modules.pipeline.dto.PipelineInstanceVO;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineReviewItemVO;
+import com.lonple.dap.server.modules.pipeline.dto.PipelinePmSecondRequest;
 import com.lonple.dap.server.modules.pipeline.dto.PipelineStartRequest;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineStepGateRequest;
-import com.lonple.dap.server.modules.pipeline.dto.PipelineUsageRequest;
+import com.lonple.dap.server.modules.pipeline.dto.PipelineTrackMergeVO;
+import com.lonple.dap.server.modules.pipeline.entity.PipeConfirmRound;
+import com.lonple.dap.server.modules.pipeline.entity.PipeRepoWorktree;
+import com.lonple.dap.server.modules.wiki.dto.WikiFileContentVO;
 import com.lonple.dap.server.security.RequirePermission;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/api/requirements/{requirementId}/pipeline")
+@RequestMapping("/api/pipeline")
 @RequiredArgsConstructor
 public class PipelineController {
 
     private final PipelineService pipelineService;
+    private final PipeRuntimeService pipeRuntimeService;
+    private final PipeMergeService pipeMergeService;
+    private final ObjectMapper objectMapper;
 
-    @GetMapping
+    @PostMapping("/instances")
     @RequirePermission("work:access")
-    public ApiResponse<PipelineInstanceVO> get(@PathVariable Long requirementId) {
+    public ApiResponse<Map<String, Long>> start(@Valid @RequestBody PipelineStartRequest request) {
+        return ApiResponse.ok(Map.of("id", pipelineService.start(request)));
+    }
+
+    @GetMapping("/instances/by-requirement/{requirementId}")
+    @RequirePermission("work:access")
+    public ApiResponse<PipelineInstanceVO> byRequirement(@PathVariable Long requirementId) {
         return ApiResponse.ok(pipelineService.getByRequirement(requirementId));
     }
 
-    @PostMapping("/start")
+    @GetMapping("/instances/by-issue/{issueId}")
     @RequirePermission("work:access")
-    public ApiResponse<PipelineInstanceVO> start(
-            @PathVariable Long requirementId,
-            @RequestBody(required = false) PipelineStartRequest req) {
-        return ApiResponse.ok(pipelineService.start(requirementId, req != null ? req : new PipelineStartRequest()));
+    public ApiResponse<PipelineInstanceVO> byIssue(@PathVariable Long issueId) {
+        return ApiResponse.ok(pipelineService.getByIssue(issueId));
     }
 
-    @PostMapping("/cancel")
+    @GetMapping("/instances/{id}")
     @RequirePermission("work:access")
-    public ApiResponse<PipelineInstanceVO> cancel(@PathVariable Long requirementId) {
-        return ApiResponse.ok(pipelineService.cancel(requirementId));
+    public ApiResponse<PipelineInstanceVO> get(@PathVariable Long id) {
+        return ApiResponse.ok(pipelineService.get(id));
     }
 
-    @PostMapping("/steps/{stepInstanceId}/approve")
+    @PostMapping("/instances/{id}/cancel")
     @RequirePermission("work:access")
-    public ApiResponse<PipelineInstanceVO> approve(
-            @PathVariable Long requirementId,
-            @PathVariable Long stepInstanceId,
-            @RequestBody(required = false) PipelineStepGateRequest req) {
-        return ApiResponse.ok(pipelineService.approveStep(requirementId, stepInstanceId, req));
+    public ApiResponse<Void> cancel(@PathVariable Long id) {
+        pipelineService.cancel(id);
+        return ApiResponse.ok();
     }
 
-    @PostMapping("/steps/{stepInstanceId}/reject")
+    @PostMapping("/instances/{id}/pm-second")
     @RequirePermission("work:access")
-    public ApiResponse<PipelineInstanceVO> reject(
-            @PathVariable Long requirementId,
-            @PathVariable Long stepInstanceId,
-            @RequestBody(required = false) PipelineStepGateRequest req) {
-        return ApiResponse.ok(pipelineService.rejectStep(requirementId, stepInstanceId, req));
+    public ApiResponse<Void> pmSecond(@PathVariable Long id, @Valid @RequestBody PipelinePmSecondRequest request) {
+        pipelineService.pmSecond(id, request);
+        return ApiResponse.ok();
     }
 
-    /** AI 步骤完成并结算耗时；body 可带本轮 token（调试跳过用；正常由 Agent 自动完成） */
-    @PostMapping("/steps/{stepInstanceId}/complete-ai")
+    /** 手动补建 worktree（仅编码阶段需要；启动/设计阶段勿依赖） */
+    @PostMapping("/instances/{id}/ensure-worktrees")
     @RequirePermission("work:access")
-    public ApiResponse<PipelineInstanceVO> completeAi(
-            @PathVariable Long requirementId,
-            @PathVariable Long stepInstanceId,
-            @RequestBody(required = false) PipelineUsageRequest usage) {
-        return ApiResponse.ok(pipelineService.completeAiStep(requirementId, stepInstanceId, usage));
+    public ApiResponse<List<PipeRepoWorktree>> ensureWorktrees(@PathVariable Long id) {
+        return ApiResponse.ok(pipelineService.ensureWorktrees(id));
     }
 
-    /** 回到待人工触发 */
-    @PostMapping("/steps/{stepInstanceId}/retry-ai")
+    @GetMapping("/instances/{id}/docs")
     @RequirePermission("work:access")
-    public ApiResponse<PipelineInstanceVO> retryAi(
-            @PathVariable Long requirementId,
-            @PathVariable Long stepInstanceId) {
-        return ApiResponse.ok(pipelineService.retryAiStep(requirementId, stepInstanceId));
+    public ApiResponse<WikiFileContentVO> openDoc(
+            @PathVariable Long id, @RequestParam("name") String name) {
+        return ApiResponse.ok(pipelineService.openWikiDoc(id, name));
     }
 
-    /** 人工触发：创建任务会话并返回 kickoff，前端再流式调用 Agent */
-    @PostMapping("/steps/{stepInstanceId}/prepare-ai")
+    @PostMapping("/units/{unitId}/trigger")
     @RequirePermission("work:access")
-    public ApiResponse<PipelineAiPrepareVO> prepareAi(
-            @PathVariable Long requirementId,
-            @PathVariable Long stepInstanceId) {
-        return ApiResponse.ok(pipelineService.prepareAi(requirementId, stepInstanceId));
+    public ApiResponse<Void> triggerUnit(@PathVariable Long unitId) {
+        pipeRuntimeService.triggerUnit(unitId);
+        return ApiResponse.ok();
     }
 
-    /** 会话完成后落 Wiki 并推进 */
-    @PostMapping("/steps/{stepInstanceId}/finalize-ai")
+    /** 开发编码：四阶段/任务卡进度与历史会话 */
+    @GetMapping("/units/{unitId}/coding")
     @RequirePermission("work:access")
-    public ApiResponse<PipelineInstanceVO> finalizeAi(
-            @PathVariable Long requirementId,
-            @PathVariable Long stepInstanceId) {
-        return ApiResponse.ok(pipelineService.finalizeAi(requirementId, stepInstanceId));
+    public ApiResponse<CodingProgressVO> codingProgress(@PathVariable Long unitId) {
+        return ApiResponse.ok(pipeRuntimeService.getCodingProgress(unitId));
     }
 
-    /** 确认人闸：更新有效评审项勾选 */
-    @PutMapping("/steps/{stepInstanceId}/review-items")
+    /** 停止正在执行的 Agent 单元 */
+    @PostMapping("/units/{unitId}/stop")
     @RequirePermission("work:access")
-    public ApiResponse<Void> updateReviewItems(
-            @PathVariable Long requirementId,
-            @PathVariable Long stepInstanceId,
-            @RequestBody List<PipelineReviewItemVO> items) {
-        pipelineService.updateReviewItems(requirementId, stepInstanceId, items);
-        return ApiResponse.ok(null);
+    public ApiResponse<Void> stopUnit(@PathVariable Long unitId) {
+        pipeRuntimeService.stopUnit(unitId);
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/units/{unitId}/confirm")
+    @RequirePermission("work:access")
+    public ApiResponse<PipeConfirmRound> getConfirm(@PathVariable Long unitId) {
+        return ApiResponse.ok(pipeRuntimeService.getPendingConfirm(unitId));
+    }
+
+    @PostMapping("/units/{unitId}/confirm")
+    @RequirePermission("work:access")
+    public ApiResponse<Void> confirmUnit(@PathVariable Long unitId, @RequestBody PipelineConfirmRequest request) {
+        pipeRuntimeService.confirmUnit(unitId, request);
+        return ApiResponse.ok();
+    }
+
+    /** 完成输出后：手动将个人空间正式文档/确认归档发布到 Wiki */
+    @PostMapping("/units/{unitId}/publish")
+    @RequirePermission("work:access")
+    public ApiResponse<Void> publishUnit(@PathVariable Long unitId) {
+        pipeRuntimeService.publishUnitOutput(unitId);
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/instances/{id}/track-merge/{trackCode}")
+    @RequirePermission("work:access")
+    public ApiResponse<PipelineTrackMergeVO> getTrackMerge(
+            @PathVariable Long id, @PathVariable String trackCode) {
+        return ApiResponse.ok(pipeMergeService.getForInstance(id, trackCode));
+    }
+
+    @PostMapping("/instances/{id}/track-merge/{trackCode}/confirm")
+    @RequirePermission("work:access")
+    public ApiResponse<Void> confirmTrackMerge(
+            @PathVariable Long id,
+            @PathVariable String trackCode,
+            @RequestBody Map<String, Object> body) {
+        Object items = body.get("itemsJson");
+        if (items == null) {
+            items = body.get("items");
+        }
+        String itemsJson;
+        if (items == null) {
+            itemsJson = "[]";
+        } else if (items instanceof String s) {
+            itemsJson = s;
+        } else {
+            try {
+                itemsJson = objectMapper.writeValueAsString(items);
+            } catch (Exception e) {
+                itemsJson = String.valueOf(items);
+            }
+        }
+        pipeRuntimeService.confirmTrackMerge(id, trackCode, itemsJson);
+        return ApiResponse.ok();
     }
 }

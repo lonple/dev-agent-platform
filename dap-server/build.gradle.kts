@@ -32,6 +32,9 @@ dependencies {
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
 
+    implementation("com.github.javaparser:javaparser-core:3.26.4")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.4")
+
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")

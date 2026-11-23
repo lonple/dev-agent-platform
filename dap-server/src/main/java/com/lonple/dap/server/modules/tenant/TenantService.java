@@ -86,6 +86,8 @@ public class TenantService {
         // 按依赖顺序清理租户业务数据（平台用户账号保留）
         tenantMapper.deleteRequirementsByTenantId(id); // cascade: flow / handler；node.requirement_id SET NULL
         tenantMapper.deleteRequirementNoSeqByTenantId(id);
+        tenantMapper.deleteIssuesByTenantId(id);
+        tenantMapper.deleteIssueNoSeqByTenantId(id);
         tenantMapper.deleteProductsByTenantId(id); // cascade: product_version
         tenantMapper.deleteWorkspaceNodesByTenantId(id);
         tenantMapper.deleteWorkspacesByTenantId(id);
