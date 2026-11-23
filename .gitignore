@@ -25,3 +25,14 @@ dap-server/build/
 dap-server/.gradle/
 dap-front/dist/
 dap-front/node_modules/
+
+# Java compiler output and sandbox build caches
+/dap-server/bin/
+/sandbox/*/bin/
+/sandbox/*/build/
+/sandbox/*/.gradle/
+
+# Local review tasks, cloned repositories and API debug responses
+/dap-server/review-data/
+/review-data/
+/me.json
