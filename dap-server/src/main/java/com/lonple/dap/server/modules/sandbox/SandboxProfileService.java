@@ -249,6 +249,16 @@ public class SandboxProfileService {
             if (n == null || !n.isObject()) {
                 throw new BizException("configJson 须为 JSON 对象");
             }
+            SandboxRuntimeInstantator.effectiveServices(n);
+            java.util.Set<String> names = new java.util.HashSet<>();
+            if (n.path("envVars").isArray()) {
+                for (JsonNode row : n.path("envVars")) {
+                    String name = row.path("name").asText(row.path("envName").asText(""));
+                    if (!name.matches("[A-Za-z_][A-Za-z0-9_]*") || !names.add(name)) {
+                        throw new BizException("环境变量名称非法或重复：" + name);
+                    }
+                }
+            }
         } catch (BizException e) {
             throw e;
         } catch (Exception e) {

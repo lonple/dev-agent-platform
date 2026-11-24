@@ -20,12 +20,8 @@ export interface SandboxProfile {
   updatedAt?: string
 }
 
-export interface SandboxEnvVar {
-  name: string
-  value?: string
-  enabled?: boolean
-  remark?: string
-}
+export type { SandboxEnvVar } from '../utils/runtimeEnvironment'
+export { extractEnvVarsFromConfig, mergeEnvVarsIntoConfig } from '../utils/runtimeEnvironment'
 
 export function ensureSandboxBundle(productId: number) {
   return request.post<any, any>(`/work/products/${productId}/sandbox/ensure`)
@@ -76,45 +72,3 @@ export const DEFAULT_RUNTIME_PROFILE_JSON = `{
   "cacheMounts": { "m2": false, "npm": false },
   "envVars": []
 }`
-
-export function extractEnvVarsFromConfig(configJson?: string): SandboxEnvVar[] {
-  if (!configJson) return []
-  try {
-    const cfg = JSON.parse(configJson)
-    const list: SandboxEnvVar[] = []
-    if (Array.isArray(cfg.envVars)) {
-      for (const it of cfg.envVars) {
-        const name = it?.name || it?.envName
-        if (!name) continue
-        list.push({
-          name,
-          value: it.value ?? it.envValue ?? '',
-          enabled: it.enabled !== false,
-          remark: it.remark ?? '',
-        })
-      }
-    } else if (cfg.env && typeof cfg.env === 'object') {
-      for (const [name, value] of Object.entries(cfg.env)) {
-        list.push({ name, value: String(value ?? ''), enabled: true })
-      }
-    }
-    return list
-  } catch {
-    return []
-  }
-}
-
-/** 把表格里的环境变量写回 configJson.envVars */
-export function mergeEnvVarsIntoConfig(configJson: string, envVars: SandboxEnvVar[]): string {
-  const cfg = configJson?.trim() ? JSON.parse(configJson) : {}
-  cfg.envVars = envVars
-    .filter((r) => r.name?.trim())
-    .map((r) => ({
-      name: r.name.trim(),
-      value: r.value ?? '',
-      enabled: r.enabled !== false,
-      remark: r.remark || undefined,
-    }))
-  delete cfg.env
-  return JSON.stringify(cfg, null, 2)
-}

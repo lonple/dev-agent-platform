@@ -11,6 +11,55 @@ class RuntimeProfileDefaultsTest {
     private final SandboxRuntimeInstantator instantator = new SandboxRuntimeInstantator(mapper, new SandboxProperties());
 
     @Test
+    void environmentVariablesDrivePortsDatabaseAndEs() {
+        var product = new SysProduct(); product.setCode("DAP");
+        var profile = new SbRuntimeProfile(); profile.setProfileCode("env");
+        profile.setConfigJson("""
+            {"envVars":[
+              {"name":"SERVER_PORT","value":"8200","serviceKey":"api"},
+              {"name":"DB_HOST","value":"host.docker.internal"},
+              {"name":"DB_URL","value":"jdbc:postgresql://{env.DB_HOST}:5432/postgres?currentSchema={schema}"},
+              {"name":"SPRING_DATASOURCE_URL","value":"{env.DB_URL}"},
+              {"name":"DAP_ES_URIS","value":"http://{env.DB_HOST}:9200"},
+              {"name":"DAP_CHAT_STEP_INDEX_ENV","value":"it-{productCodeLower}-{reqNoSafeLower}"}
+            ],"testing":{}}
+            """);
+        var result = instantator.instantiate(product, profile, "DAP-0", null, 3L, (k,s,e) -> 18001);
+        assertEquals(8200, result.portPublishes().getFirst().get("container"));
+        assertEquals("http://127.0.0.1:8200", result.env().get("DAP_TEST_API_URL"));
+        assertEquals("http://host.docker.internal:9200", result.env().get("DAP_ES_URIS"));
+        assertEquals("jdbc:postgresql://host.docker.internal:5432/postgres?currentSchema=it_dap_dap_0", result.env().get("SPRING_DATASOURCE_URL"));
+        assertEquals("it-dap-dap_0", result.env().get("DAP_CHAT_STEP_INDEX_ENV"));
+    }
+
+    @Test
+    void migratedSchemaVariableRemainsTheSourceForJdbcAndFlyway() {
+        var product = new SysProduct(); product.setCode("DAP");
+        var profile = new SbRuntimeProfile(); profile.setProfileCode("env");
+        profile.setConfigJson("""
+            {"schemaEnv":"DB_SCHEMA","envVars":[
+              {"name":"DB_SCHEMA","value":"dap_dev"},
+              {"name":"SPRING_DATASOURCE_URL","value":"jdbc:postgresql://db/postgres?currentSchema={schema}"},
+              {"name":"SPRING_FLYWAY_SCHEMAS","value":"{schema}"}]}
+            """);
+        var result = instantator.instantiate(product, profile, "DAP-0", null, 3L, (k,s,e) -> 18001);
+        assertEquals("dap_dev", result.runtimeInstance().get("schema"));
+        assertEquals("dap_dev", result.env().get("SPRING_FLYWAY_SCHEMAS"));
+        assertTrue(result.env().get("SPRING_DATASOURCE_URL").endsWith("currentSchema=dap_dev"));
+    }
+
+    @Test
+    void invalidReferencesFailWithoutPrintingValues() {
+        var env = new java.util.LinkedHashMap<String, String>();
+        env.put("A", "{env.B}"); env.put("B", "{env.A}");
+        assertThrows(com.lonple.dap.server.common.BizException.class,
+                () -> SandboxRuntimeInstantator.resolveEnvReferences(env, java.util.Map.of()));
+        env.clear(); env.put("URL", "{env.DISABLED}");
+        assertThrows(com.lonple.dap.server.common.BizException.class,
+                () -> SandboxRuntimeInstantator.resolveEnvReferences(env, java.util.Map.of()));
+    }
+
+    @Test
     void defaultDoesNotAssumeAnyProductsServicesOrDependencies() throws Exception {
         var config = mapper.readTree(RuntimeProfileDefaults.DEFAULT_CONFIG_JSON);
         assertTrue(config.path("ports").path("services").isEmpty());
@@ -70,10 +119,10 @@ class RuntimeProfileDefaultsTest {
                    {"name":"UNKNOWN_TOKEN","value":"{no.such.placeholder}"}]}
                 """);
         var env = instantator.instantiate(product, profile, "REQ-8", null, 10L, (k, s, e) -> 18500).env();
-        assertEquals("jdbc:postgresql://10.0.0.12:5433/dap_dev?currentSchema=it_other_REQ_8", env.get("SPRING_DATASOURCE_URL"));
+        assertEquals("jdbc:postgresql://10.0.0.12:5433/dap_dev?currentSchema=it_other_req_8", env.get("SPRING_DATASOURCE_URL"));
         assertEquals("dap_dev", env.get("SPRING_DATASOURCE_USERNAME"));
         assertEquals("secret", env.get("SPRING_DATASOURCE_PASSWORD"));
-        assertEquals("it_other_REQ_8", env.get("SPRING_FLYWAY_SCHEMAS"));
+        assertEquals("it_other_req_8", env.get("SPRING_FLYWAY_SCHEMAS"));
         assertEquals("/data/dap-dev/", env.get("DAP_DATA_ROOT"));
         assertEquals("http://127.0.0.1:8200", env.get("SERVICE_URL"));
         assertEquals("http://127.0.0.1:18500", env.get("SERVICE_PUBLIC_URL"));

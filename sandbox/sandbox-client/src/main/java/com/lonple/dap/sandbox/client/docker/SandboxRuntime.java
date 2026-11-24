@@ -114,6 +114,24 @@ public class SandboxRuntime {
         }
         cmd.add("-v");
         cmd.add(volumePath + ":/workspace");
+        if (cacheMounts != null) {
+            for (Map.Entry<String, String> entry : cacheMounts.entrySet()) {
+                if (!truthy(entry.getValue())) continue;
+                String key = entry.getKey();
+                if ("gradle".equals(key) || "uv".equals(key)) {
+                    cmd.add("-v");
+                    cmd.add("dap-cache-" + key + ("gradle".equals(key) ? ":/root/.gradle" : ":/root/.cache/uv"));
+                } else if (key.startsWith("workspace:")) {
+                    String path = key.substring("workspace:".length());
+                    if (!path.matches("[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*")
+                            || java.util.Arrays.asList(path.split("/")).contains("..")) {
+                        throw new IllegalArgumentException("Invalid workspace cache path");
+                    }
+                    cmd.add("-v");
+                    cmd.add("dap-ws-" + worktreeKey + "-" + worktreeKey(path) + ":/workspace/" + path);
+                }
+            }
+        }
         if (cacheMounts == null || truthy(cacheMounts.get("m2"))) {
             cmd.add("-v");
             cmd.add(props.getM2CacheVolume() + ":/root/.m2");

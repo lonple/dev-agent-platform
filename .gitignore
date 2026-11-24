@@ -36,3 +36,4 @@ dap-front/node_modules/
 /dap-server/review-data/
 /review-data/
 /me.json
+/sandbox/code-tools/.build-tools/

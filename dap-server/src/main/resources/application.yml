@@ -49,6 +49,7 @@ dap:
     history-max-messages: 20
     history-max-chars: 8000
     step-index-env: ${DAP_CHAT_STEP_INDEX_ENV:dev}
+    step-index-name: ${DAP_CHAT_STEP_INDEX_NAME:}
     step-detail-max-chars: 20000
   search:
     ripgrep:

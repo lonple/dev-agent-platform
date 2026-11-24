@@ -1,7 +1,8 @@
 package com.lonple.dap.server.modules.pipeline;
 
 import com.lonple.dap.server.modules.agenttool.dto.CodeRepoDtos;
-import com.lonple.dap.server.modules.agenttool.repo.CodeRepoToolService;
+import com.lonple.dap.server.common.BizException;
+import com.lonple.dap.server.modules.sandbox.SandboxCodeBridge;
 import com.lonple.dap.server.modules.pipeline.entity.PipeRepoWorktree;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +36,7 @@ public class StockIntTestRunner {
             "<testcase\\b[^>]*\\bclassname=\"([^\"]+)\"[^>]*\\bname=\"([^\"]+)\"",
             Pattern.CASE_INSENSITIVE);
 
-    private final CodeRepoToolService codeRepoToolService;
+    private final SandboxCodeBridge sandboxCodeBridge;
 
     public record Outcome(
             boolean passed,
@@ -49,18 +50,21 @@ public class StockIntTestRunner {
     public Outcome run(Long sessionId, List<PipeRepoWorktree> worktrees) {
         String localPath = pickRepoPath(worktrees);
         String action = "test";
-        CodeRepoDtos.ActionResult result;
-        try {
-            result = codeRepoToolService.runAction(
-                    sessionId, null, localPath, action, Map.of());
-        } catch (Exception e) {
-            log.warn("stock int-test run failed session={}: {}", sessionId, e.getMessage());
-            String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            String report = buildReport(false, -1, localPath == null ? "-" : localPath, action,
-                    "", msg, "平台执行测试失败：" + msg);
-            return new Outcome(false, -1, localPath, action, report, msg);
+        // 测试目标只能来自本问题/需求产品的运行方案实例，禁止静默回落本机。
+        // 容器的 DAP_TEST_* 已由 SandboxRuntimeInstantator 按 testing/ports 配置注入。
+        // 环境准备异常向上抛出，不作为用例失败交给 Agent 猜测 URL 或修改业务代码。
+        if (!sandboxCodeBridge.shouldRouteMutating(sessionId)) {
+            throw new BizException("存量集成测试环境未就绪：当前会话未连接产品运行方案对应的沙箱，请启用沙箱并完成运行方案配置后重试");
         }
+        if (sandboxCodeBridge.hasConfiguredBuild(sessionId)) {
+            requireEnvironmentAction(sessionId, "build", false);
+        }
+        requireEnvironmentAction(sessionId, "start_dev", true);
+        CodeRepoDtos.ActionResult result = sandboxCodeBridge.runAction(sessionId, action, Map.of());
         int exit = result.getExitCode();
+        if (exit == 78) {
+            throw new BizException("存量集成测试环境启动失败：" + trimBlock(nullToEmpty(result.getStderr()), 3000));
+        }
         boolean passed = exit == 0;
         String stdout = nullToEmpty(result.getStdout());
         String stderr = nullToEmpty(result.getStderr());
@@ -71,6 +75,16 @@ public class StockIntTestRunner {
         log.info("stock int-test done session={} repo={} action={} exit={} passed={}",
                 sessionId, repoPath, action, exit, passed);
         return new Outcome(passed, exit, repoPath, action, report, compact);
+    }
+
+    private void requireEnvironmentAction(Long sessionId, String action, boolean allowBackground) {
+        CodeRepoDtos.ActionResult result = sandboxCodeBridge.runAction(sessionId, action, Map.of());
+        if (result.getExitCode() == 0
+                || (allowBackground && result.isBackground() && result.getExitCode() == -1)) {
+            return;
+        }
+        throw new BizException("存量集成测试环境准备失败（" + action + "）："
+                + trimBlock(nullToEmpty(result.getStderr()) + "\n" + nullToEmpty(result.getStdout()), 3000));
     }
 
     private static String pickRepoPath(List<PipeRepoWorktree> worktrees) {

@@ -247,6 +247,13 @@ function Import-AgentLlmEnv([string]$EnvFile) {
 }
 Import-AgentLlmEnv $agentEnv
 
+# 本地完整开发链路包含沙箱服务；后端也必须启用沙箱，否则不会创建租约。
+# 保留显式设置，方便有意关闭沙箱的场景。
+if ([string]::IsNullOrWhiteSpace($env:DAP_SANDBOX_ENABLED)) {
+    $env:DAP_SANDBOX_ENABLED = 'true'
+}
+Write-Sys "Backend sandbox enabled: $env:DAP_SANDBOX_ENABLED"
+
 $sbMgrGradle = Join-Path $Root 'sandbox\sandbox-manager\gradlew.bat'
 $sbCliGradle = Join-Path $Root 'sandbox\sandbox-client\gradlew.bat'
 if (-not (Test-Path $sbMgrGradle) -or -not (Test-Path $sbCliGradle)) {

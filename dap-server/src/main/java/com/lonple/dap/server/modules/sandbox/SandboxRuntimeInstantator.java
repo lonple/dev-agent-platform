@@ -80,12 +80,24 @@ public class SandboxRuntimeInstantator {
 
         Map<String, String> placeholders = new LinkedHashMap<>();
         placeholders.put("productCode", productCode);
+        placeholders.put("productCodeLower", productCode.toLowerCase(java.util.Locale.ROOT));
         placeholders.put("reqNo", req);
         placeholders.put("reqNoSafe", reqNoSafe);
+        placeholders.put("reqNoSafeLower", reqNoSafe.toLowerCase(java.util.Locale.ROOT));
         placeholders.put("tenantId", tenant);
 
         String schemaPattern = text(cfg, "/database/schemaPattern", "it_{productCode}_{reqNoSafe}");
-        String schema = explicitSchema != null ? explicitSchema : render(schemaPattern, placeholders);
+        String schemaEnv = value(cfg, "schemaEnv");
+        if (schemaEnv != null) {
+            Map<String, String> declared = new LinkedHashMap<>();
+            applyProfileEnvVars(cfg, declared, placeholders);
+            explicitSchema = resolveEnv(schemaEnv, declared, new LinkedHashMap<>(), new HashSet<>(), placeholders);
+            if (explicitSchema.isBlank() || explicitSchema.contains("{schema}")) {
+                throw new BizException("schemaEnv 必须引用有效的 schema 环境变量，不能循环引用 {schema}");
+            }
+        }
+        String schema = explicitSchema != null ? explicitSchema
+                : render(schemaPattern, placeholders).toLowerCase(java.util.Locale.ROOT);
         placeholders.put("schema", schema);
 
         placeholders.put("database.host", nz(dbHost));
@@ -154,10 +166,24 @@ public class SandboxRuntimeInstantator {
         applyExecutionEnv(cfg, env);
         // 平台集成测试约定变量
         applyTestingEnv(cfg, env, servicePorts);
+        resolveEnvReferences(env, placeholders);
 
         Map<String, Boolean> cache = new LinkedHashMap<>();
         cache.put("m2", cfg.path("cacheMounts").path("m2").asBoolean(true));
         cache.put("npm", cfg.path("cacheMounts").path("npm").asBoolean(true));
+        cache.put("gradle", cfg.path("cacheMounts").path("gradle").asBoolean(false));
+        cache.put("uv", cfg.path("cacheMounts").path("uv").asBoolean(false));
+        JsonNode workspaceCaches = cfg.path("workspaceCaches");
+        if (workspaceCaches.isArray()) {
+            for (JsonNode item : workspaceCaches) {
+                String path = item.asText("");
+                if (!path.matches("[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*")
+                        || java.util.Arrays.asList(path.split("/")).contains("..")) {
+                    throw new BizException("工作区缓存路径非法");
+                }
+                cache.put("workspace:" + path, true);
+            }
+        }
 
         String imageOverride = cfg.path("imageOverride").isNull() || cfg.path("imageOverride").asText().isBlank()
                 ? null
@@ -199,13 +225,62 @@ public class SandboxRuntimeInstantator {
         List<Map<String, Object>> out = new ArrayList<>();
         Set<Integer> seenPorts = new HashSet<>();
         Set<String> keys = new HashSet<>();
+        JsonNode variables = cfg.path("envVars");
+        if (variables.isArray()) {
+            for (JsonNode variable : variables) {
+                if (!variable.path("enabled").asBoolean(true)) continue;
+                String key = value(variable, "serviceKey");
+                if (key == null) continue;
+                String portValue = value(variable, "value");
+                if (portValue == null || !portValue.matches("[0-9]+")) {
+                    throw new BizException("服务端口变量必须是 1–65535 的整数：" + variable.path("name").asText());
+                }
+                int port;
+                try { port = Integer.parseInt(portValue); }
+                catch (NumberFormatException e) { throw new BizException("服务端口超出范围：" + key); }
+                if (port < 1 || port > 65535 || !key.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")) {
+                    throw new BizException("服务端口或标识非法：" + key);
+                }
+                if (keys.contains(key) || seenPorts.contains(port)) throw new BizException("服务标识或端口重复：" + key);
+                addService(out, seenPorts, keys, key, port);
+            }
+        }
+        Set<String> envServiceKeys = new HashSet<>(keys);
         JsonNode services = cfg.path("ports").path("services");
         if (services.isArray()) {
             for (JsonNode svc : services) {
+                if (envServiceKeys.contains(svc.path("key").asText())) continue;
                 addService(out, seenPorts, keys, svc.path("key").asText(null), svc.path("containerPort").asInt(0));
             }
         }
         return out;
+    }
+
+    /** 只递归展开显式 env 引用；未知普通占位符仍按旧规则保留。 */
+    static void resolveEnvReferences(Map<String, String> env, Map<String, String> placeholders) {
+        Map<String, String> resolved = new LinkedHashMap<>();
+        for (String name : env.keySet()) resolveEnv(name, env, resolved, new HashSet<>(), placeholders);
+        env.putAll(resolved);
+    }
+
+    private static String resolveEnv(String name, Map<String, String> env, Map<String, String> resolved,
+                                     Set<String> visiting, Map<String, String> placeholders) {
+        if (resolved.containsKey(name)) return resolved.get(name);
+        if (!env.containsKey(name)) throw new BizException("引用的环境变量未启用或不存在：" + name);
+        if (!visiting.add(name)) throw new BizException("环境变量存在循环引用：" + name);
+        Matcher matcher = PLACEHOLDER.matcher(env.get(name));
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            String token = matcher.group(1);
+            String replacement = token.startsWith("env.")
+                    ? resolveEnv(token.substring(4), env, resolved, visiting, placeholders)
+                    : placeholders.getOrDefault(token, matcher.group(0));
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(result);
+        visiting.remove(name);
+        resolved.put(name, result.toString());
+        return result.toString();
     }
 
     private static void addService(List<Map<String, Object>> out, Set<Integer> seenPorts, Set<String> keys,

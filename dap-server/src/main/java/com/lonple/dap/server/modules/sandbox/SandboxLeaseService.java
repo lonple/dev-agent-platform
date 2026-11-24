@@ -159,6 +159,13 @@ public class SandboxLeaseService {
         // 已有 ATTACHED 则复用（同会话 / 同产品同 worktree），避免重复 docker create 抢端口
         SbLease existing = findReusableAttached(req.sessionId, req.productId, wt.toString());
         if (existing != null) {
+            SbProductResource res = resourceMapper.selectById(existing.getResourceId());
+            SbNode node = res == null ? null : nodeMapper.selectById(res.getNodeId());
+            // DB 的 ATTACHED 不能证明 manager/client 的内存路由仍然存在。
+            // 先按已分配快照幂等 attach；client 会重新识别现有容器，不重新分配端口。
+            if (props.isAttachOnLease()) {
+                restoreAttachment(existing, node);
+            }
             existing.setExpiresAt(LocalDateTime.now().plusHours(Math.max(1, props.getDefaultLeaseTtlHours())));
             existing.setUpdatedAt(LocalDateTime.now());
             if (req.sessionId != null) {
@@ -168,8 +175,6 @@ public class SandboxLeaseService {
                 existing.setJobId(req.jobId);
             }
             leaseMapper.updateById(existing);
-            SbProductResource res = resourceMapper.selectById(existing.getResourceId());
-            SbNode node = res == null ? null : nodeMapper.selectById(res.getNodeId());
             log.info("sandbox lease reused id={} sessionId={} worktree={}",
                     existing.getId(), existing.getSessionId(), existing.getWorktreeHostPath());
             return toView(existing, res, node);
@@ -273,6 +278,33 @@ public class SandboxLeaseService {
             leaseMapper.updateById(lease);
         }
         return toView(lease, res, node);
+    }
+
+    void restoreAttachment(SbLease lease, SbNode node) {
+        var runtime = objectMapper.readTree(lease.getRuntimeInstanceJson());
+        if (runtime == null || !runtime.isObject()) {
+            throw new BizException("沙箱租约运行快照缺失，无法恢复连接：" + lease.getId());
+        }
+        String nodeCode = runtime.path("nodeCode").asText(node == null ? "" : node.getNodeCode());
+        String image = runtime.path("image").asText("");
+        if (!StringUtils.hasText(nodeCode) || !StringUtils.hasText(image)) {
+            throw new BizException("沙箱租约运行快照缺少节点或镜像，无法恢复连接：" + lease.getId());
+        }
+        Map<String, String> env = new LinkedHashMap<>();
+        runtime.path("env").properties().forEach(e -> env.put(e.getKey(), e.getValue().asText("")));
+        List<Map<String, Object>> ports = new java.util.ArrayList<>();
+        runtime.path("ports").properties().forEach(e -> {
+            int host = e.getValue().path("host").asInt(0);
+            int container = e.getValue().path("container").asInt(0);
+            if (host < 1 || container < 1 || host > 65535 || container > 65535) {
+                throw new BizException("沙箱租约端口快照非法，无法恢复连接：" + lease.getId());
+            }
+            ports.add(Map.of("host", host, "container", container));
+        });
+        Map<String, String> caches = new LinkedHashMap<>();
+        runtime.path("cacheMounts").properties().forEach(e -> caches.put(e.getKey(), e.getValue().asText("false")));
+        managerClient.attach(lease.getId(), nodeCode, image, lease.getWorktreeHostPath(), env, ports, caches);
+        log.info("sandbox lease connection restored id={} node={}", lease.getId(), nodeCode);
     }
 
     @Transactional

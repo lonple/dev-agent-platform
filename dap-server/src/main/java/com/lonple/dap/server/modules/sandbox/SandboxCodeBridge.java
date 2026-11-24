@@ -70,6 +70,12 @@ public class SandboxCodeBridge {
         return out;
     }
 
+    public boolean hasConfiguredBuild(Long sessionId) {
+        SbLease lease = leaseService.requireAttachedBySession(sessionId);
+        return objectMapper.readTree(lease.getRuntimeInstanceJson()).path("env")
+                .path("SANDBOX_BUILD_COMMAND").asText("").trim().length() > 0;
+    }
+
     public CodeRepoDtos.GenericResult commit(Long sessionId, String message, String authorName, String authorEmail) {
         Long leaseId = leaseId(sessionId);
         long t0 = System.currentTimeMillis();

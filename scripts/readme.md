@@ -61,3 +61,17 @@ scripts\start-dev.bat -BuildSandboxImage
 也可执行 `scripts\build-code-tools-image.bat`。该脚本每次都会重新打包并构建镜像，标签为 `dap-sandbox-webdev:dev`；镜像包含 JDK、Maven、Node.js 等工具和 code-tools 服务，不启动容器，也不会替换已经运行的容器。
 
 脚本根据自身位置定位项目根目录，也支持从其他工作目录通过绝对路径调用。若 PowerShell 执行策略阻止直接运行 `.ps1`，可使用对应 `.bat` 入口。
+
+## DAP 产品沙箱运行
+
+产品运行方案统一用 `envVars` 配置数据库、ES、模型和端口。端口变量附带 `serviceKey`（如 `SERVER_PORT=8200` 对应 `api`、`DAP_UI_PORT=8201` 对应 `web`），平台自动分配宿主映射端口。变量之间用 `{env.变量名}` 引用；旧数据库和服务端口字段在编辑保存时转换，连接值保持不变。
+
+DAP 运行方案使用 `execution.startCommand=sh /opt/dap-scripts/sandbox-start.sh`、`execution.testCommand=sh /opt/dap-scripts/sandbox-test.sh`，`buildCommand` 可留空。启动脚本安装 Linux 依赖，使用 Gradle bootRun、Vite 和 uv 启动当前工作区的后端、前端与 Agent，等待三个服务就绪后才执行测试。退出码 78 表示环境启动失败，不进入业务修复建议。日志位于容器 `/tmp/dap-runtime/`。
+
+缓存配置建议启用 `cacheMounts.gradle/uv/npm`，并配置 `workspaceCaches` 为 `dap-front/node_modules`、`dap-test/node_modules`、`dap-agent/.venv-linux`、`dap-server/.gradle`、`dap-server/build`。这些路径挂载独立 Linux 缓存卷，避免覆盖 Windows 的依赖和构建结果；修改 lockfile 后启动脚本会重新同步依赖。映射下载缓存不代表业务代码已经编译。
+
+ES 连接变量为 `DAP_ES_URIS=http://host.docker.internal:9200`；测试环境固定使用 `DAP_CHAT_STEP_INDEX_NAME=dap-test-chat-step`，读写同一个索引或别名，不追加问题号或月份；该索引已预先创建。未配置固定名称时仍兼容 `DAP_CHAT_STEP_INDEX_ENV` 按月分索引的原有行为。已有数据库连接和 schema 由该产品变量配置决定，不自动改库。
+
+镜像构建脚本从 PATH 中的 Gradle 复制发行版，镜像内安装 Node 24、uv 和 Playwright Chromium，并校验 Python 至少 3.14.2。使用 `build-code-tools-image.ps1` 构建，避免直接构建时缺失 `.build-tools` 暂存目录。
+
+旧数据库 schema 迁移后通过 `schemaEnv` 指向对应环境变量（如 `DB_SCHEMA`），`{schema}`、JDBC 与 Flyway 使用同一配置值；未显式指定时自动生成小写 schema，避免 PostgreSQL search_path 对大写标识的解析差异。

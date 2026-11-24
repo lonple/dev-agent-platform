@@ -166,11 +166,11 @@ function openEditProfile(row: SandboxProfile) {
   } catch {
     profileForm.configJson = row.configJson || DEFAULT_RUNTIME_PROFILE_JSON
   }
-  profileForm.envVars = extractEnvVarsFromConfig(row.configJson)
   try {
+    profileForm.envVars = extractEnvVarsFromConfig(row.configJson)
     Object.assign(runtimeForm, readRuntimeProfile(profileForm.configJson))
     profileEditorMode.value = 'form'
-  } catch { profileEditorMode.value = 'json' }
+  } catch { profileForm.envVars = []; profileEditorMode.value = 'json' }
   profileDialog.value = true
 }
 
@@ -201,14 +201,10 @@ function switchProfileEditor(mode: 'form' | 'json') {
 function runtimeSummary(row: SandboxProfile) {
   try {
     const value = readRuntimeProfile(row.configJson || DEFAULT_RUNTIME_PROFILE_JSON)
-    const db = value.dbHost && value.dbName ? `库 ${value.dbHost}/${value.dbName}${value.dbSchema ? '.' + value.dbSchema : ''}` : ''
+    const db = `${extractEnvVarsFromConfig(row.configJson).length} 个环境变量`
     const test = value.testEnabled ? `测试 ${value.testModelMode === 'mock' ? 'Mock' : '真实模型'}` : ''
-    return [db, value.services.map(s => `${s.key} : ${s.containerPort ?? '待填写'}`).join(' · ') || '不映射业务端口', test, `有效 ${value.ttl} 小时`].filter(Boolean).join(' · ')
+    return [db, extractEnvVarsFromConfig(row.configJson).filter(r => r.serviceKey && r.enabled !== false).map(r => `${r.serviceKey} : ${r.value}`).join(' · ') || '不映射业务端口', test, `有效 ${value.ttl} 小时`].filter(Boolean).join(' · ')
   } catch { return '配置格式异常，请编辑检查' }
-}
-
-function addRuntimeService() {
-  runtimeForm.services.push({ key: '', containerPort: null, protocol: 'http' })
 }
 
 /** 执行占用的容器端口 → 宿主映射；数据来自租约的 runtimeInstance.ports。 */
@@ -757,34 +753,23 @@ onMounted(async () => {
         </el-form-item>
         <div class="runtime-editor-mode"><el-radio-group :model-value="profileEditorMode" @change="switchProfileEditor"><el-radio-button value="form">常用配置</el-radio-button><el-radio-button value="json">高级 JSON</el-radio-button></el-radio-group></div>
         <template v-if="profileEditorMode === 'form'">
-        <el-divider content-position="left">数据库</el-divider>
-        <el-form-item>
-          <template #label><span class="field-label">连接<FieldHelp content="IP 需能从容器内访问（127.0.0.1 指容器自己，本机库填 host.docker.internal）。这里只提供取值，平台不预设变量名：在「其它变量」用 {database.host}、{database.port}、{database.name}、{database.username}、{database.password}、{database.schema} 引用，连接串直接在变量值里拼。模式留空时 {schema} 按 it_{productCode}_{reqNoSafe} 生成。" /></span></template>
-          <div class="runtime-grid">
-            <el-input v-model="runtimeForm.dbHost" placeholder="IP，如 10.0.0.12" aria-label="数据库 IP" />
-            <el-input-number v-model="runtimeForm.dbPort" :min="1" :max="65535" :precision="0" placeholder="端口 5432" aria-label="数据库端口" controls-position="right" />
-            <el-input v-model="runtimeForm.dbName" placeholder="库名，如 dap_dev" aria-label="库名" />
-            <el-input v-model="runtimeForm.dbSchema" placeholder="模式，如 dap" aria-label="模式" />
-            <el-input v-model="runtimeForm.dbUsername" placeholder="账号" aria-label="数据库账号" autocomplete="off" />
-            <el-input v-model="runtimeForm.dbPassword" type="password" show-password placeholder="密码" aria-label="数据库密码" autocomplete="new-password" />
-          </div>
-        </el-form-item>
-
-        <el-divider content-position="left">服务</el-divider>
-        <el-form-item>
-          <template #label><span class="field-label">端口<FieldHelp content="一行一个容器内服务：标识用于识别与被测试引用，容器端口是它监听的端口。平台为每行分配宿主端口并映射，实际值见「执行占用明细」。端口与地址变量在「其它变量」里用 {ports.<标识>}、{ports.<标识>.host} 声明。" /></span></template>
-          <div style="width: 100%">
-            <div class="service-port-labels">
-              <span>服务标识</span><span>容器端口</span><span />
-            </div>
-            <div v-for="(service, index) in runtimeForm.services" :key="index" class="service-port-row">
-              <el-input v-model="service.key" placeholder="如 api" aria-label="服务标识" />
-              <el-input-number v-model="service.containerPort" :min="1" :max="65535" :precision="0" placeholder="如 8200" aria-label="容器端口" controls-position="right" />
-              <el-button link type="danger" @click="runtimeForm.services.splice(index, 1)">删除</el-button>
-            </div>
-            <el-button size="small" @click="addRuntimeService">添加服务端口</el-button>
-          </div>
-        </el-form-item>
+        <el-divider content-position="left">运行环境</el-divider>
+            <el-form-item>
+              <template #label><span class="field-label">环境变量<FieldHelp content="数据库、ES、模型和监听端口统一在此配置，勾选才注入。值可用 {env.变量名} 引用其它已启用变量；{schema} 为当前问题或需求的隔离模式。端口变量填写整数，并填写服务标识（如 api、web、agent），平台自动分配宿主映射端口。容器访问本机依赖使用 host.docker.internal。" /></span></template>
+              <div style="width: 100%">
+                <div v-for="(row, idx) in profileForm.envVars" :key="idx" class="env-row">
+                  <el-checkbox v-model="row.enabled" />
+                  <el-input v-model="row.name" placeholder="变量名" style="width: 180px" />
+                  <el-input v-model="row.value" :type="/password|secret|token|key/i.test(row.name) ? 'password' : 'text'" :show-password="/password|secret|token|key/i.test(row.name)" placeholder="值" style="flex: 1" />
+                  <el-input v-model="row.serviceKey" placeholder="端口服务标识（可选）" style="width: 160px" />
+                  <el-input v-model="row.remark" placeholder="备注" style="width: 100px" />
+                  <el-button link type="danger" @click="removeProfileEnvRow(idx)">删</el-button>
+                </div>
+                <el-button size="small" @click="addProfileEnvRow">添加变量</el-button>
+              </div>
+            </el-form-item>
+        <el-form-item label="启动命令"><el-input v-model="runtimeForm.startCommand" placeholder="如 sh scripts/sandbox-start.sh" /></el-form-item>
+        <el-form-item label="构建命令（可选）"><el-input v-model="runtimeForm.buildCommand" placeholder="启动命令包含必要编译时留空" /></el-form-item>
         <el-divider content-position="left">测试</el-divider>
         <el-form-item>
           <template #label><span class="field-label">启用测试<FieldHelp content="用 dap-test 在容器内测试这套环境：接口地址取服务标识 api 的端口，页面地址取 web 的。" /></span></template>
@@ -822,19 +807,7 @@ onMounted(async () => {
             </el-form-item>
             <el-form-item label="宿主机端口池"><div class="runtime-port-pool"><el-input-number v-model="runtimeForm.portStart" :min="1" :max="65535" :precision="0" /> 至 <el-input-number v-model="runtimeForm.portEnd" :min="1" :max="65535" :precision="0" /></div></el-form-item>
             <el-form-item label="依赖缓存"><el-checkbox v-model="runtimeForm.cacheM2">Maven</el-checkbox><el-checkbox v-model="runtimeForm.cacheNpm">npm</el-checkbox></el-form-item>
-            <el-form-item>
-              <template #label><span class="field-label">其它变量<FieldHelp content="如 Redis 地址、模型密钥。勾选才注入。值支持占位符：{productCode}、{reqNo}、{reqNoSafe}、{tenantId}、{schema}、{redisKeyPrefix}、{mqPrefix}、{database.host/port/name/schema/username/password}、{ports.<服务标识>}（容器端口）、{ports.<服务标识>.host}（宿主端口）。" /></span></template>
-              <div style="width: 100%">
-                <div v-for="(row, idx) in profileForm.envVars" :key="idx" class="env-row">
-                  <el-checkbox v-model="row.enabled" />
-                  <el-input v-model="row.name" placeholder="变量名" style="width: 180px" />
-                  <el-input v-model="row.value" :type="/password|secret|token|key/i.test(row.name) ? 'password' : 'text'" :show-password="/password|secret|token|key/i.test(row.name)" placeholder="值" style="flex: 1" />
-                  <el-input v-model="row.remark" placeholder="备注" style="width: 100px" />
-                  <el-button link type="danger" @click="removeProfileEnvRow(idx)">删</el-button>
-                </div>
-                <el-button size="small" @click="addProfileEnvRow">添加变量</el-button>
-              </div>
-            </el-form-item>
+
           </el-collapse-item>
         </el-collapse>
         </template>
@@ -844,16 +817,16 @@ onMounted(async () => {
             v-model="profileForm.configJson"
             type="textarea"
             :rows="12"
-            placeholder="端口、schema 模式、缓存等"
+            placeholder="环境变量、执行命令、缓存等"
           />
           <details class="runtime-field-help"><summary>高级属性含义与生效边界</summary>
             <p><b>imageOverride：</b>本方案指定的镜像；null 表示使用产品执行资源的镜像。</p>
             <p><b>sandbox.leaseTtlHours：</b>执行环境的有效小时数。preferredResourceCodes 是优先尝试的资源编码列表，空数组表示不指定偏好。</p>
-            <p><b>ports.services：</b>端口清单，是容器的唯一端口来源。key 是服务标识（同时用于测试引用），containerPort 是容器内监听端口；同一容器端口只映射一次。端口/地址变量在 envVars 里用 {ports.&lt;key&gt;}、{ports.&lt;key&gt;.host} 声明，protocol 不是启动命令，也不自动开启 HTTPS。</p>
+            <p><b>服务端口：</b>在 envVars 的端口变量上填写 serviceKey。变量值就是容器监听端口，平台自动分配宿主映射端口；同一端口只映射一次。旧 ports.services 配置保存后会转换成变量。</p>
             <p><b>ports.pool：</b>宿主机可分配的端口范围。实际分配结果写进租约的 runtimeInstance.ports（key → host / container）。</p>
-            <p><b>envVars：</b>项目实际使用的环境变量；name 为名称，value 为值，enabled 控制是否注入，remark 仅作备注。envTemplates 是变量模板，同名时 envVars 优先；端口相关变量以 ports.services 为准。</p>
+            <p><b>envVars：</b>项目实际使用的环境变量；name 为名称，value 为值，enabled 控制是否注入，remark 仅作备注。envTemplates 是变量模板，同名时 envVars 优先；serviceKey 声明该变量同时作为服务端口。</p>
             <p><b>占位符：</b>envVars / envTemplates 的 value 支持 {productCode}、{reqNo}、{reqNoSafe}、{tenantId}、{schema}、{redisKeyPrefix}、{mqPrefix}、{database.host}、{database.port}、{database.name}、{database.schema}、{database.username}、{database.password}、{ports.&lt;key&gt;}、{ports.&lt;key&gt;.host}。未知占位符原样保留。</p>
-            <p><b>database：</b>通用连接信息（host、port、name、schema、username、password），只作为占位符取值，不生成任何变量名。{schema} 取 database.schema；未填时按 it_{productCode}_{reqNoSafe} 生成（JSON 里可用 database.schemaPattern 覆盖）。不会仅凭此配置创建数据库或完成迁移。</p>
+            <p><b>连接配置：</b>数据库、ES 等都通过 envVars 声明，变量值可引用 {env.变量名}；{schema} 默认按当前问题或需求生成隔离模式。旧 database 连接参数保存后会迁移为 DB_* 变量。</p>
             <p><b>middleware：</b>redisKeyPrefixPattern、mqPrefixPattern 生成 {redisKeyPrefix}、{mqPrefix}，不是 Redis 或消息队列的连接地址。</p>
             <p><b>cacheMounts：</b>m2、npm 决定是否挂载依赖缓存。</p>
             <p><b>execution：</b>testCommand 为集成测试命令；buildCommand、startCommand 替换 Agent 调用的构建、启动动作（一般不需要）；actionTimeoutSec 为命令超时秒数。</p>
