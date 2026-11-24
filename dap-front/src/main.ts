@@ -9,6 +9,7 @@ import router from './router'
 
 import './styles/tokens.css'
 import './styles/index.css'
+import './styles/pipeline-overview.css'
 
 const app = createApp(App)
 
