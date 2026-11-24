@@ -271,7 +271,17 @@ public class CodeWorkspaceService {
         };
     }
 
+    /** 运行方案「沙箱执行配置」生成的命令；未配置时按构建文件自动识别。 */
+    private static final Map<String, String> CONFIGURED_COMMAND_ENV = Map.of(
+            "build", "SANDBOX_BUILD_COMMAND",
+            "test", "SANDBOX_TEST_COMMAND",
+            "start_dev", "SANDBOX_START_COMMAND");
+
     private List<String> autoDetect(Path root, String kind) {
+        String configured = System.getenv(CONFIGURED_COMMAND_ENV.getOrDefault(kind, ""));
+        if (StringUtils.hasText(configured)) {
+            return List.of("sh", "-c", configured.trim());
+        }
         boolean hasGradlew = Files.exists(root.resolve("gradlew"))
                 || Files.exists(root.resolve("build.gradle"))
                 || Files.exists(root.resolve("build.gradle.kts"));

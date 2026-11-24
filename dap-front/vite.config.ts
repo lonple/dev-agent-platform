@@ -4,11 +4,11 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [vue()],
   server: {
-    port: 8201,
+    port: Number(process.env.DAP_UI_PORT || 8201),
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8200',
+        target: process.env.DAP_API_PROXY_TARGET || 'http://localhost:8200',
         changeOrigin: true,
         // SSE 长连接：避免代理超时/缓冲截断流式响应
         timeout: 0,

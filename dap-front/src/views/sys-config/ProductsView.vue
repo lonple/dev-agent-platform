@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
@@ -32,8 +32,10 @@ import {
 } from '../../api/sandbox'
 import { listWikiTree, type WikiNodeItem } from '../../api/wiki'
 import { useAuthStore } from '../../stores/auth'
+import type { ProductRepoKind } from '../../api/product'
 import { formatDateTime } from '../../utils/date'
 import { readRuntimeProfile, writeRuntimeProfile } from '../../utils/runtimeProfile'
+import FieldHelp from '../../components/FieldHelp.vue'
 
 const VERSION_STATUS_OPTIONS: { value: ProductVersionStatus; label: string }[] = [
   { value: 'PLANNING', label: '计划中' },
@@ -199,8 +201,27 @@ function switchProfileEditor(mode: 'form' | 'json') {
 function runtimeSummary(row: SandboxProfile) {
   try {
     const value = readRuntimeProfile(row.configJson || DEFAULT_RUNTIME_PROFILE_JSON)
-    return `${value.services.map(s => `${s.key} : ${s.containerPort ?? '待填写'}`).join(' · ') || '不映射业务端口'} · 有效 ${value.ttl} 小时`
+    const db = value.dbHost && value.dbName ? `库 ${value.dbHost}/${value.dbName}${value.dbSchema ? '.' + value.dbSchema : ''}` : ''
+    const test = value.testEnabled ? `测试 ${value.testModelMode === 'mock' ? 'Mock' : '真实模型'}` : ''
+    return [db, value.services.map(s => `${s.key} : ${s.containerPort ?? '待填写'}`).join(' · ') || '不映射业务端口', test, `有效 ${value.ttl} 小时`].filter(Boolean).join(' · ')
   } catch { return '配置格式异常，请编辑检查' }
+}
+
+function addRuntimeService() {
+  runtimeForm.services.push({ key: '', containerPort: null, protocol: 'http' })
+}
+
+/** 执行占用的容器端口 → 宿主映射；数据来自租约的 runtimeInstance.ports。 */
+function portMappingText(row: any) {
+  let runtime = row?.runtimeInstance
+  if (!runtime && typeof row?.runtimeInstanceJson === 'string') {
+    try { runtime = JSON.parse(row.runtimeInstanceJson) } catch { return '—' }
+  }
+  const ports = runtime?.ports
+  if (!ports || typeof ports !== 'object') return '—'
+  const items = Object.entries(ports as Record<string, any>)
+    .map(([key, value]) => `${key} ${value?.container ?? '?'}→${value?.host ?? '?'}`)
+  return items.length ? items.join(' · ') : '—'
 }
 
 function addProfileEnvRow() {
@@ -287,7 +308,7 @@ const productForm = reactive({
   wikiNodeId: undefined as number | undefined,
   wikiParentId: undefined as number | undefined,
   wikiNewName: '',
-  codeRepos: [{ localPath: '', label: '' }] as { localPath: string; label: string }[],
+  codeRepos: [{ localPath: '', label: '', repoKind: 'BIZ' }] as { localPath: string; label: string; repoKind: ProductRepoKind }[],
 })
 const wikiTree = ref<WikiNodeItem[]>([])
 const wikiTreeLoading = ref(false)
@@ -374,7 +395,7 @@ function openCreateProduct() {
   productForm.wikiNodeId = undefined
   productForm.wikiParentId = undefined
   productForm.wikiNewName = ''
-  productForm.codeRepos = [{ localPath: '', label: '' }]
+  productForm.codeRepos = [{ localPath: '', label: '', repoKind: 'BIZ' }]
   productDialog.value = true
   void loadWikiTree()
 }
@@ -394,20 +415,21 @@ function openEditProduct() {
     ? selected.value.codeRepos.map((r) => ({
         localPath: r.localPath,
         label: r.label || '',
+        repoKind: r.repoKind || 'BIZ',
       }))
-    : [{ localPath: '', label: '' }]) as { localPath: string; label: string }[]
+    : [{ localPath: '', label: '', repoKind: 'BIZ' }]) as { localPath: string; label: string; repoKind: ProductRepoKind }[]
   productDialog.value = true
   void loadWikiTree()
 }
 
 function addRepoRow() {
-  productForm.codeRepos.push({ localPath: '', label: '' })
+  productForm.codeRepos.push({ localPath: '', label: '', repoKind: 'BIZ' })
 }
 
 function removeRepoRow(idx: number) {
   productForm.codeRepos.splice(idx, 1)
   if (!productForm.codeRepos.length) {
-    productForm.codeRepos.push({ localPath: '', label: '' })
+    productForm.codeRepos.push({ localPath: '', label: '', repoKind: 'BIZ' })
   }
 }
 
@@ -418,6 +440,7 @@ async function submitProduct() {
     const repos = productForm.codeRepos
       .map((r) => ({
         localPath: r.localPath.trim(),
+        repoKind: r.repoKind,
         label: r.label.trim() || undefined,
       }))
       .filter((r) => r.localPath)
@@ -693,6 +716,9 @@ onMounted(async () => {
             <el-table-column label="用途" width="100"><template #default="{ row }">{{ ({ PIPE_CODE: '开发编码', PIPE_IT: '集成测试' } as Record<string, string>)[row.purpose] || row.purpose }}</template></el-table-column>
             <el-table-column prop="sessionId" label="会话" width="90" />
             <el-table-column prop="worktreeHostPath" label="代码工作目录" min-width="200" show-overflow-tooltip />
+            <el-table-column label="端口映射（容器→宿主）" min-width="180">
+              <template #default="{ row }">{{ portMappingText(row) }}</template>
+            </el-table-column>
             <el-table-column prop="expiresAt" label="过期" min-width="150" />
           </el-table>
           </el-collapse-item></el-collapse>
@@ -712,82 +738,127 @@ onMounted(async () => {
     >
       <el-alert type="info" :closable="false" show-icon class="runtime-product-note" :title="`当前产品：${products.find(p => p.id === profileProductId)?.name || '—'}。配置仅保存到此产品；新建方案不复制其他产品。`" />
       <el-form label-width="110px" :disabled="profileSubmitting">
-        <el-form-item label="编码" required>
+        <el-form-item required>
+          <template #label><span class="field-label">编码<FieldHelp content="方案唯一标识，流水线用它选择方案；创建后不可修改。不同产品可使用相同编码。" /></span></template>
           <el-input
             v-model="profileForm.profileCode"
             :disabled="profileMode === 'edit'"
             maxlength="64"
             placeholder="方案标识，例如 default、backend、integration"
           />
-          <div class="form-tip">方案的唯一标识，用于流水线选择，例如 dev 或 integration；创建后不能改编码。不同产品可使用相同编码。</div>
         </el-form-item>
-        <el-form-item label="名称">
+        <el-form-item>
+          <template #label><span class="field-label">名称<FieldHelp content="便于识别的名称，不影响项目、分支或程序启动参数。" /></span></template>
           <el-input v-model="profileForm.displayName" maxlength="128" placeholder="例如：日常研发环境、接口测试环境" />
-          <div class="form-tip">方便识别用途的名称，不会修改项目名称、分支或程序启动参数。</div>
         </el-form-item>
-        <el-form-item label="设为默认">
+        <el-form-item>
+          <template #label><span class="field-label">设为默认<FieldHelp content="流水线未指定方案时使用此项；修改对后续申请生效。" /></span></template>
           <el-switch v-model="profileForm.isDefault" />
-          <span class="form-tip" style="margin-left: 12px">流水线未指定方案时使用此项；修改对后续申请生效。</span>
         </el-form-item>
         <div class="runtime-editor-mode"><el-radio-group :model-value="profileEditorMode" @change="switchProfileEditor"><el-radio-button value="form">常用配置</el-radio-button><el-radio-button value="json">高级 JSON</el-radio-button></el-radio-group></div>
         <template v-if="profileEditorMode === 'form'">
-        <el-form-item label="容器镜像"><el-input v-model="runtimeForm.image" placeholder="留空使用执行资源的默认镜像" /><div class="form-tip">提供 JDK、Node 等构建工具的 Docker 镜像名称。通常留空；指定镜像须能在执行节点使用，不是业务接口地址。</div></el-form-item>
-        <el-form-item label="有效时长"><el-input-number v-model="runtimeForm.ttl" :min="1" :precision="0" /><span class="form-tip" style="margin-left: 12px">小时，任务申请的执行环境到期后回收。</span></el-form-item>
-        <el-form-item label="服务端口">
-          <div style="width: 100%"><p class="form-tip">仅当需要访问容器中启动的网页或接口时添加。纯编译、单元测试可不填；必须与本产品实际启动配置一致。</p>
-          <div class="service-port-labels"><span>服务标识</span><span>容器内监听端口</span><span>注入的端口变量（可选）</span><span>操作</span></div>
-          <div v-for="(service, index) in runtimeForm.services" :key="index" class="service-port-row">
-            <el-input v-model="service.key" placeholder="如 api，仅用于区分服务" aria-label="服务标识" />
-            <el-input-number v-model="service.containerPort" :min="1" :max="65535" :precision="0" placeholder="项目实际端口" aria-label="容器内端口" />
-            <el-input v-model="service.env" placeholder="程序不读取变量则留空" aria-label="端口环境变量名" />
-            <el-button link type="danger" @click="runtimeForm.services.splice(index, 1)">删除</el-button>
+        <el-divider content-position="left">数据库</el-divider>
+        <el-form-item>
+          <template #label><span class="field-label">连接<FieldHelp content="IP 需能从容器内访问（127.0.0.1 指容器自己，本机库填 host.docker.internal）。这里只提供取值，平台不预设变量名：在「其它变量」用 {database.host}、{database.port}、{database.name}、{database.username}、{database.password}、{database.schema} 引用，连接串直接在变量值里拼。模式留空时 {schema} 按 it_{productCode}_{reqNoSafe} 生成。" /></span></template>
+          <div class="runtime-grid">
+            <el-input v-model="runtimeForm.dbHost" placeholder="IP，如 10.0.0.12" aria-label="数据库 IP" />
+            <el-input-number v-model="runtimeForm.dbPort" :min="1" :max="65535" :precision="0" placeholder="端口 5432" aria-label="数据库端口" controls-position="right" />
+            <el-input v-model="runtimeForm.dbName" placeholder="库名，如 dap_dev" aria-label="库名" />
+            <el-input v-model="runtimeForm.dbSchema" placeholder="模式，如 dap" aria-label="模式" />
+            <el-input v-model="runtimeForm.dbUsername" placeholder="账号" aria-label="数据库账号" autocomplete="off" />
+            <el-input v-model="runtimeForm.dbPassword" type="password" show-password placeholder="密码" aria-label="数据库密码" autocomplete="new-password" />
           </div>
-          <p v-if="!runtimeForm.services.length" class="form-tip">当前无服务端口。不会自动添加 web、api 或 admin。</p>
-          <el-button size="small" @click="runtimeForm.services.push({ key: '', containerPort: null, env: '', protocol: 'http' })">添加本产品的服务端口</el-button>
-          <div class="runtime-field-help">
-            <p><b>服务标识：</b>方案内唯一的名称，如 web、api。它只区分端口映射，不会自动启动对应服务。</p>
-            <p><b>容器内监听端口：</b>程序实际监听的端口，按配置文件或启动命令填写。不同容器可使用相同端口，无需为避让其他产品改号。</p>
-            <p><b>端口变量：</b>平台将容器内端口写入此环境变量。如端口填 8200、变量填 SERVER_PORT，则注入 SERVER_PORT=8200。程序必须读取该变量才会生效；随意填写 WEB_PORT 不会自动改变 Vite 端口。</p>
-            <p><b>DAP 示例（不是预填值）：</b>本仓库前端开发配置为 8201，后端为 8200；如果容器启动命令另设端口，以容器启动配置为准。</p>
-          </div></div>
         </el-form-item>
-        <el-form-item label="宿主机端口池"><div class="runtime-port-pool"><el-input-number v-model="runtimeForm.portStart" :min="1" :max="65535" :precision="0" /> 至 <el-input-number v-model="runtimeForm.portEnd" :min="1" :max="65535" :precision="0" /></div><div class="form-tip">执行机器提供给外部访问的端口范围，平台自动分配。例如分配 18023 → 容器 8200，访问的是执行机器的 18023。它与程序监听端口不同，通常保留原始范围。</div></el-form-item>
-        <el-form-item label="依赖缓存"><el-checkbox v-model="runtimeForm.cacheM2">复用 Maven 缓存</el-checkbox><el-checkbox v-model="runtimeForm.cacheNpm">复用 npm 缓存</el-checkbox><div class="form-tip">按项目需要开启，减少 Java / Node 依赖重复下载；不会自动安装或启动数据库、Redis。</div></el-form-item>
-        <el-form-item label="依赖与变量">
-          <div class="form-tip" style="margin-bottom: 8px">
-            按项目实际读取的变量名配置数据库、Redis 或外部接口地址，例如 SPRING_DATASOURCE_URL。地址必须能从容器内访问，localhost 指容器自身。填写变量不会自动启动依赖服务。
+
+        <el-divider content-position="left">服务</el-divider>
+        <el-form-item>
+          <template #label><span class="field-label">端口<FieldHelp content="一行一个容器内服务：标识用于识别与被测试引用，容器端口是它监听的端口。平台为每行分配宿主端口并映射，实际值见「执行占用明细」。端口与地址变量在「其它变量」里用 {ports.<标识>}、{ports.<标识>.host} 声明。" /></span></template>
+          <div style="width: 100%">
+            <div class="service-port-labels">
+              <span>服务标识</span><span>容器端口</span><span />
+            </div>
+            <div v-for="(service, index) in runtimeForm.services" :key="index" class="service-port-row">
+              <el-input v-model="service.key" placeholder="如 api" aria-label="服务标识" />
+              <el-input-number v-model="service.containerPort" :min="1" :max="65535" :precision="0" placeholder="如 8200" aria-label="容器端口" controls-position="right" />
+              <el-button link type="danger" @click="runtimeForm.services.splice(index, 1)">删除</el-button>
+            </div>
+            <el-button size="small" @click="addRuntimeService">添加服务端口</el-button>
           </div>
-          <div v-if="profileForm.envVars.length" class="env-labels"><span>是否注入</span><span>变量名</span><span>变量值</span><span>用途备注</span></div>
-          <div v-for="(row, idx) in profileForm.envVars" :key="idx" class="env-row">
-            <el-checkbox v-model="row.enabled" />
-            <el-input v-model="row.name" placeholder="变量名" style="width: 180px" />
-            <el-input v-model="row.value" :type="/password|secret|token|key/i.test(row.name) ? 'password' : 'text'" :show-password="/password|secret|token|key/i.test(row.name)" placeholder="容器内可访问的地址或配置值" style="flex: 1" />
-            <el-input v-model="row.remark" placeholder="备注" style="width: 100px" />
-            <el-button link type="danger" @click="removeProfileEnvRow(idx)">删</el-button>
-          </div>
-          <el-button size="small" @click="addProfileEnvRow">添加变量</el-button>
-          <div class="form-tip">勾选后才注入。变量名必须与程序读取的名称一致；备注仅供人查看。密码值可点击眼睛查看。已有项目专用的变量不应照搬到新产品。</div>
         </el-form-item>
+        <el-divider content-position="left">测试</el-divider>
+        <el-form-item>
+          <template #label><span class="field-label">启用测试<FieldHelp content="用 dap-test 在容器内测试这套环境：接口地址取服务标识 api 的端口，页面地址取 web 的。" /></span></template>
+          <el-switch v-model="runtimeForm.testEnabled" />
+        </el-form-item>
+        <template v-if="runtimeForm.testEnabled">
+          <el-form-item>
+            <template #label><span class="field-label">管理员账号<FieldHelp content="测试会用它创建本次专用的用户和租户。" /></span></template>
+            <div class="runtime-grid two">
+              <el-input v-model="runtimeForm.testUsername" placeholder="账号" aria-label="测试账号" autocomplete="off" />
+              <el-input v-model="runtimeForm.testPassword" type="password" show-password placeholder="密码" aria-label="测试账号密码" autocomplete="new-password" />
+            </div>
+          </el-form-item>
+          <el-form-item>
+            <template #label><span class="field-label">模型<FieldHelp content="真实模型只测接口和页面；Mock 不消耗额度且能测完整流程。服务标识不是 api / web 时，可在 JSON 的 testing.apiUrl、testing.uiUrl 直接写地址。" /></span></template>
+            <el-radio-group v-model="runtimeForm.testModelMode"><el-radio value="real">真实模型</el-radio><el-radio value="mock">Mock</el-radio></el-radio-group>
+          </el-form-item>
         </template>
-        <el-form-item v-else label="完整配置 JSON">
+
+        <el-collapse class="runtime-more">
+          <el-collapse-item title="更多设置（一般不用改）" name="more">
+            <el-form-item>
+              <template #label><span class="field-label">测试命令<FieldHelp content="流水线「集成测试」节点在沙箱中执行的命令，退出码 0 为通过。留空时按仓库自动选择：有 package.json 执行 npm test，有 Gradle 执行 gradle test。" /></span></template>
+              <el-input v-model="runtimeForm.testCommand" placeholder="留空自动识别" />
+            </el-form-item>
+            <el-form-item>
+              <template #label><span class="field-label">命令超时<FieldHelp content="秒；构建或测试超过此时间判为失败。" /></span></template>
+              <el-input-number v-model="runtimeForm.actionTimeoutSec" :min="1" :precision="0" placeholder="180" />
+            </el-form-item>
+            <el-form-item v-if="runtimeForm.testEnabled && runtimeForm.testModelMode === 'mock'" label="Mock 端口"><el-input-number v-model="runtimeForm.testMockPort" :min="1" :max="65535" :precision="0" placeholder="18202" /></el-form-item>
+            <el-form-item label="容器镜像"><el-input v-model="runtimeForm.image" placeholder="留空使用执行资源的默认镜像" /></el-form-item>
+            <el-form-item>
+              <template #label><span class="field-label">有效时长<FieldHelp content="小时；到期回收执行环境。" /></span></template>
+              <el-input-number v-model="runtimeForm.ttl" :min="1" :precision="0" />
+            </el-form-item>
+            <el-form-item label="宿主机端口池"><div class="runtime-port-pool"><el-input-number v-model="runtimeForm.portStart" :min="1" :max="65535" :precision="0" /> 至 <el-input-number v-model="runtimeForm.portEnd" :min="1" :max="65535" :precision="0" /></div></el-form-item>
+            <el-form-item label="依赖缓存"><el-checkbox v-model="runtimeForm.cacheM2">Maven</el-checkbox><el-checkbox v-model="runtimeForm.cacheNpm">npm</el-checkbox></el-form-item>
+            <el-form-item>
+              <template #label><span class="field-label">其它变量<FieldHelp content="如 Redis 地址、模型密钥。勾选才注入。值支持占位符：{productCode}、{reqNo}、{reqNoSafe}、{tenantId}、{schema}、{redisKeyPrefix}、{mqPrefix}、{database.host/port/name/schema/username/password}、{ports.<服务标识>}（容器端口）、{ports.<服务标识>.host}（宿主端口）。" /></span></template>
+              <div style="width: 100%">
+                <div v-for="(row, idx) in profileForm.envVars" :key="idx" class="env-row">
+                  <el-checkbox v-model="row.enabled" />
+                  <el-input v-model="row.name" placeholder="变量名" style="width: 180px" />
+                  <el-input v-model="row.value" :type="/password|secret|token|key/i.test(row.name) ? 'password' : 'text'" :show-password="/password|secret|token|key/i.test(row.name)" placeholder="值" style="flex: 1" />
+                  <el-input v-model="row.remark" placeholder="备注" style="width: 100px" />
+                  <el-button link type="danger" @click="removeProfileEnvRow(idx)">删</el-button>
+                </div>
+                <el-button size="small" @click="addProfileEnvRow">添加变量</el-button>
+              </div>
+            </el-form-item>
+          </el-collapse-item>
+        </el-collapse>
+        </template>
+        <el-form-item v-else>
+          <template #label><span class="field-label">完整配置 JSON<FieldHelp content="面向高级配置；切回常用配置会同步表单，保存使用当前模式内容。此处配置不等于数据库连通性检查。" /></span></template>
           <el-input
             v-model="profileForm.configJson"
             type="textarea"
             :rows="12"
             placeholder="端口、schema 模式、缓存等"
           />
-          <div class="form-tip">
-            面向高级配置，数据库隔离模板等额外字段会保留。切回常用配置会同步表单；保存使用当前模式内容。此处配置不等于数据库连通性检查。
-          </div>
           <details class="runtime-field-help"><summary>高级属性含义与生效边界</summary>
             <p><b>imageOverride：</b>本方案指定的镜像；null 表示使用产品执行资源的镜像。</p>
             <p><b>sandbox.leaseTtlHours：</b>执行环境的有效小时数。preferredResourceCodes 是优先尝试的资源编码列表，空数组表示不指定偏好。</p>
-            <p><b>ports.pool：</b>宿主机可分配的端口范围。services 中 key 区分服务，containerPort 是容器内端口，env 是注入端口数值的变量名；protocol 不是启动命令，也不自动开启 HTTPS。</p>
-            <p><b>envVars：</b>项目实际使用的环境变量；name 为名称，value 为值，enabled 控制是否注入，remark 仅作备注。envTemplates 是支持占位符替换的变量模板，同名时 envVars 优先。</p>
-            <p><b>database.schemaPattern：</b>生成数据库 schema 名称的规则。urlTemplate 用于生成 JDBC_URL，业务程序仍须读取该变量；不会仅凭此配置自动创建数据库或完成迁移。</p>
-            <p><b>middleware：</b>redisKeyPrefixPattern、mqPrefixPattern 生成任务级前缀，不是 Redis 或消息队列的连接地址。</p>
+            <p><b>ports.services：</b>端口清单，是容器的唯一端口来源。key 是服务标识（同时用于测试引用），containerPort 是容器内监听端口；同一容器端口只映射一次。端口/地址变量在 envVars 里用 {ports.&lt;key&gt;}、{ports.&lt;key&gt;.host} 声明，protocol 不是启动命令，也不自动开启 HTTPS。</p>
+            <p><b>ports.pool：</b>宿主机可分配的端口范围。实际分配结果写进租约的 runtimeInstance.ports（key → host / container）。</p>
+            <p><b>envVars：</b>项目实际使用的环境变量；name 为名称，value 为值，enabled 控制是否注入，remark 仅作备注。envTemplates 是变量模板，同名时 envVars 优先；端口相关变量以 ports.services 为准。</p>
+            <p><b>占位符：</b>envVars / envTemplates 的 value 支持 {productCode}、{reqNo}、{reqNoSafe}、{tenantId}、{schema}、{redisKeyPrefix}、{mqPrefix}、{database.host}、{database.port}、{database.name}、{database.schema}、{database.username}、{database.password}、{ports.&lt;key&gt;}、{ports.&lt;key&gt;.host}。未知占位符原样保留。</p>
+            <p><b>database：</b>通用连接信息（host、port、name、schema、username、password），只作为占位符取值，不生成任何变量名。{schema} 取 database.schema；未填时按 it_{productCode}_{reqNoSafe} 生成（JSON 里可用 database.schemaPattern 覆盖）。不会仅凭此配置创建数据库或完成迁移。</p>
+            <p><b>middleware：</b>redisKeyPrefixPattern、mqPrefixPattern 生成 {redisKeyPrefix}、{mqPrefix}，不是 Redis 或消息队列的连接地址。</p>
             <p><b>cacheMounts：</b>m2、npm 决定是否挂载依赖缓存。</p>
-            <p><b>历史配置注意：</b>startTemplates、flywayEnabled、dbHostRef、releaseWorktreeOnClose、autoCommitOnRelease 在当前执行实现中未形成对应自动操作，不应当作已生效开关。原始模板不再预置这些业务假设。</p>
+            <p><b>execution：</b>testCommand 为集成测试命令；buildCommand、startCommand 替换 Agent 调用的构建、启动动作（一般不需要）；actionTimeoutSec 为命令超时秒数。</p>
+            <p><b>testing：</b>平台集成测试（dap-test）开关：username、password、modelMode（real/mock）、mockPort；接口/页面地址默认取服务标识 api / web 的容器端口，可在 JSON 里用 apiUrl、uiUrl 直接指定。相关 DAP_TEST_* 变量是测试约定，不属于产品运行时配置。</p>
+            <p><b>未知字段：</b>startTemplates、flywayEnabled、dbHostRef、releaseWorktreeOnClose、autoCommitOnRelease 等历史字段在当前执行实现中未形成对应自动操作，不应当作已生效开关。</p>
           </details>
         </el-form-item>
       </el-form>
@@ -879,9 +950,15 @@ onMounted(async () => {
               placeholder="本地 Git 仓库绝对路径（须已 git init/clone；编码按需求编号建 feat/需求号 分支）"
             />
             <el-input v-model="row.label" placeholder="备注" style="width: 120px" />
+            <el-select v-model="row.repoKind" aria-label="仓库用途" style="width: 140px; flex-shrink: 0">
+              <el-option label="业务代码" value="BIZ" />
+              <el-option label="自动化测试" value="TEST" />
+              <el-option label="其他" value="OTHER" />
+            </el-select>
             <el-button link type="danger" @click="removeRepoRow(idx)">删</el-button>
           </div>
           <el-button size="small" @click="addRepoRow">添加仓库</el-button>
+          <div class="form-tip">自动化测试仓库会被存量集成测试优先选用。这里填写 Git 仓库根目录；若测试位于同一仓库的 dap-test 子目录，仍需另行适配测试入口，不能直接把普通子目录当作独立仓库。</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1062,13 +1139,19 @@ onMounted(async () => {
 .environment-summary small { display:block; font-size:11px; color:var(--dap-gray-500); margin-bottom:8px; }
 .environment-summary strong { font-size:14px; font-weight:500; color:var(--dap-gray-900); overflow-wrap:anywhere; }
 .runtime-editor-mode { margin:8px 0 24px 110px; }
+.field-label { display:inline-flex; align-items:center; }
 .runtime-product-note { margin-bottom:20px; }
-.service-port-labels { display:grid; grid-template-columns:minmax(90px,1fr) 150px minmax(120px,1.5fr) auto; gap:8px; margin-top:16px; font-size:11px; color:var(--dap-gray-500); }
+.service-port-labels { display:grid; grid-template-columns:minmax(120px,1fr) 150px auto; gap:8px; margin-top:16px; font-size:11px; color:var(--dap-gray-500); }
 .runtime-field-help { margin-top:12px; padding:12px 16px; background:var(--dap-gray-50); border-radius:6px; font-size:12px; line-height:1.8; color:var(--dap-gray-700); }
 .runtime-field-help p { margin:4px 0; }
 .env-labels { display:flex; gap:18px; width:100%; margin:8px 0; font-size:11px; color:var(--dap-gray-500); }
 .env-labels span:nth-child(2) { width:160px; } .env-labels span:nth-child(3) { flex:1; }
-.service-port-row { display:grid; grid-template-columns:minmax(90px,1fr) 150px minmax(120px,1.5fr) auto; gap:8px; margin:10px 0; align-items:center; }
+.service-port-row { display:grid; grid-template-columns:minmax(120px,1fr) 150px auto; gap:8px; margin:10px 0; align-items:center; }
+.runtime-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; width:100%; }
+.runtime-grid.two { grid-template-columns:repeat(2, minmax(0,1fr)); }
+.runtime-grid .el-input-number,
+.runtime-grid .el-select { width:100%; }
+.runtime-more { margin:8px 0 0; border-top:none; }
 .runtime-port-pool { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .env-row { width:100%; flex-wrap:wrap; }
 @media(max-width:700px) { .environment-summary { grid-template-columns:1fr; } .service-port-row,.service-port-labels { grid-template-columns:1fr 1fr; } .runtime-editor-mode { margin-left:0; } .env-labels { display:none; } }

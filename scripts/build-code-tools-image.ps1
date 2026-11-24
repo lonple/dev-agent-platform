@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Stop"
-$Root = $PSScriptRoot
+$Root = Split-Path -Parent $PSScriptRoot
 Set-Location (Join-Path $Root "sandbox\code-tools")
 Write-Host "==> build code-tools jar"
 .\gradlew.bat bootJar --no-daemon

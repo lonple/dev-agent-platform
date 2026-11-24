@@ -317,6 +317,11 @@ public class ProductService {
     }
 
     private void replaceCodeRepos(Long productId, List<ProductSaveRequest.CodeRepoSpec> specs) {
+        if (specs != null) {
+            for (var spec : specs) {
+                if (spec != null && StringUtils.hasText(spec.getLocalPath())) normalizeRepoKind(spec.getRepoKind());
+            }
+        }
         codeRepoMapper.delete(new LambdaQueryWrapper<SysProductCodeRepo>()
                 .eq(SysProductCodeRepo::getProductId, productId));
         if (CollectionUtils.isEmpty(specs)) {
@@ -332,11 +337,19 @@ public class ProductService {
             row.setProductId(productId);
             row.setLocalPath(spec.getLocalPath().trim());
             row.setLabel(StringUtils.hasText(spec.getLabel()) ? spec.getLabel().trim() : null);
-            row.setRepoKind("BIZ");
+            row.setRepoKind(normalizeRepoKind(spec.getRepoKind()));
             row.setSortNo(i++);
             row.setCreatedAt(now);
             codeRepoMapper.insert(row);
         }
+    }
+
+    private String normalizeRepoKind(String value) {
+        String kind = StringUtils.hasText(value) ? value.trim().toUpperCase(java.util.Locale.ROOT) : "BIZ";
+        if (!List.of("BIZ", "TEST", "OTHER").contains(kind)) {
+            throw new BizException("仓库用途无效，请选择业务代码、自动化测试或其他");
+        }
+        return kind;
     }
 
     private ProductVO toVO(SysProduct product, boolean withVersions) {

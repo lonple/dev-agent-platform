@@ -1,0 +1,24 @@
+{
+  "name": "dap-test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/run.mjs",
+    "test:api": "node scripts/run.mjs --project=api",
+    "test:ui": "node scripts/run.mjs --project=ui",
+    "test:workflow": "node scripts/run.mjs --project=workflow",
+    "check": "tsc --noEmit",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.10",
+    "pg": "^8.23.1"
+  }
+}

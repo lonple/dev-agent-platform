@@ -18,10 +18,10 @@
 cd e:\workspace\agent-project\dev-agent-platform
 
 # 首次构建 webdev 镜像
-.\build-code-tools-image.ps1
-# 或：.\start-dev.ps1 -BuildSandboxImage
+.\scripts\build-code-tools-image.ps1
+# 或：.\scripts\start-dev.ps1 -BuildSandboxImage
 
-.\start-dev.bat
+.\scripts\start-dev.bat
 
 # dap-server: dap.sandbox.enabled=true（默认镜像 dap-sandbox-webdev:dev）
 

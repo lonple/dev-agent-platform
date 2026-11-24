@@ -44,6 +44,8 @@ public class ProductSaveRequest {
 
     @Data
     public static class CodeRepoSpec {
+        /** BIZ / TEST / OTHER；未传或空值兼容为 BIZ。 */
+        private String repoKind;
         @NotBlank
         @Size(max = 1000)
         private String localPath;

@@ -2,15 +2,15 @@
 # backend :8200  frontend :8201  agent :8202
 # sandbox-manager :9210  sandbox-client :9300
 # Free ports if occupied; merge logs; Ctrl+C stops all
-# Usage: .\start-dev.ps1
-# Optional: .\start-dev.ps1 -BuildSandboxImage   # 缺失时构建 dap-sandbox-webdev:dev
+# Usage (from project root): .\scripts\start-dev.ps1
+# Optional: .\scripts\start-dev.ps1 -BuildSandboxImage   # 缺失时构建 dap-sandbox-webdev:dev
 
 param(
     [switch]$BuildSandboxImage
 )
 
 $ErrorActionPreference = 'Stop'
-$Root = $PSScriptRoot
+$Root = Split-Path -Parent $PSScriptRoot
 $BackendPort = 8200
 $FrontendPort = 8201
 $AgentPort = 8202
@@ -176,7 +176,7 @@ function Ensure-SandboxImage {
     }
     if ($BuildSandboxImage) {
         Write-Sys "[sandbox check] building image $SandboxImage ..." 'Yellow'
-        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'build-code-tools-image.ps1')
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'build-code-tools-image.ps1')
         if ($LASTEXITCODE -ne 0) {
             Write-Sys '[sandbox check] image build failed — start-dev continues; fix before attach' 'Yellow'
         } else {
@@ -184,7 +184,7 @@ function Ensure-SandboxImage {
         }
         return
     }
-    Write-Sys "[sandbox check] image not built yet: $SandboxImage — start-dev continues. Build once with .\build-code-tools-image.ps1 (or -BuildSandboxImage). Container create = lease attach, not now." 'Yellow'
+    Write-Sys "[sandbox check] image not built yet: $SandboxImage — start-dev continues. Build once with .\scripts\build-code-tools-image.ps1 (or -BuildSandboxImage). Container create = lease attach, not now." 'Yellow'
 }
 
 Set-Location $Root

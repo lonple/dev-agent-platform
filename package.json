@@ -1,0 +1,10 @@
+{
+  "name": "dev-agent-platform",
+  "private": true,
+  "scripts": {
+    "test": "npm --prefix dap-test test",
+    "test:api": "npm --prefix dap-test run test:api",
+    "test:ui": "npm --prefix dap-test run test:ui",
+    "test:workflow": "npm --prefix dap-test run test:workflow"
+  }
+}

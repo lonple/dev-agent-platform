@@ -237,7 +237,7 @@ public class SandboxProfileService {
             throw new BizException("productId 必填");
         }
         SysProduct p = productMapper.selectById(productId);
-        if (p == null) {
+        if (p == null || !java.util.Objects.equals(p.getTenantId(), requireTenant())) {
             throw new BizException(404, "产品不存在");
         }
         return p;

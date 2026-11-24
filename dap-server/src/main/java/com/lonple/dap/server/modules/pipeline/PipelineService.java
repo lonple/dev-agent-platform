@@ -342,15 +342,17 @@ public class PipelineService {
         if (second == null) {
             throw new BizException("缺少产品经理二审节点");
         }
-        if (!"WAITING_HUMAN".equals(second.getStatus()) && !"PENDING".equals(second.getStatus())
-                && !"WAITING_TRIGGER".equals(second.getStatus())) {
-            // ai_pre 未完成时不允许二审
-            PipeNodeInstance aiPre = nodeInstanceMapper.selectOne(new LambdaQueryWrapper<PipeNodeInstance>()
-                    .eq(PipeNodeInstance::getInstanceId, instanceId)
-                    .eq(PipeNodeInstance::getNodeCode, "ai_pre"));
-            if (aiPre == null || !"SUCCEEDED".equals(aiPre.getStatus())) {
-                throw new BizException("请先完成 AI 初审后再二审");
-            }
+        PipeNodeInstance aiPre = nodeInstanceMapper.selectOne(new LambdaQueryWrapper<PipeNodeInstance>()
+                .eq(PipeNodeInstance::getInstanceId, instanceId)
+                .eq(PipeNodeInstance::getNodeCode, "ai_pre"));
+        if (aiPre == null || !"SUCCEEDED".equals(aiPre.getStatus())) {
+            throw new BizException("请先完成 AI 初审后再二审");
+        }
+        if (!"WAITING_HUMAN".equals(second.getStatus())
+                && !"WAITING_TRIGGER".equals(second.getStatus())
+                && !"PENDING".equals(second.getStatus())
+                && !PipeInstanceStatus.SUSPENDED.name().equals(inst.getStatus())) {
+            throw new BizException("二审节点当前不可操作");
         }
 
         try {

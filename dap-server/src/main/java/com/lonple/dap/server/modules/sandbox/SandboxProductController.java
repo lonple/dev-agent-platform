@@ -1,6 +1,7 @@
 package com.lonple.dap.server.modules.sandbox;
 
 import com.lonple.dap.server.common.ApiResponse;
+import com.lonple.dap.server.security.RequirePermission;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -24,16 +25,19 @@ public class SandboxProductController {
     private final SandboxProfileService profileService;
 
     @PostMapping("/ensure")
+    @RequirePermission("product:operate")
     public ApiResponse<Map<String, Object>> ensure(@PathVariable Long productId) {
         return ApiResponse.ok(profileService.ensureDefaultBundle(productId));
     }
 
     @GetMapping("/resources")
+    @RequirePermission("product:view")
     public ApiResponse<List<Map<String, Object>>> resources(@PathVariable Long productId) {
         return ApiResponse.ok(profileService.listResources(productId));
     }
 
     @PutMapping("/resources")
+    @RequirePermission("product:operate")
     public ApiResponse<Map<String, Object>> upsertResource(
             @PathVariable Long productId, @RequestBody ResourceBody body) {
         SandboxProfileService.ResourceSaveReq req = new SandboxProfileService.ResourceSaveReq();
@@ -46,11 +50,13 @@ public class SandboxProductController {
     }
 
     @GetMapping("/profiles")
+    @RequirePermission("product:view")
     public ApiResponse<List<Map<String, Object>>> profiles(@PathVariable Long productId) {
         return ApiResponse.ok(profileService.listProfiles(productId));
     }
 
     @PutMapping("/profiles")
+    @RequirePermission("product:operate")
     public ApiResponse<Map<String, Object>> upsertProfile(
             @PathVariable Long productId, @RequestBody ProfileBody body) {
         SandboxProfileService.ProfileSaveReq req = new SandboxProfileService.ProfileSaveReq();
@@ -63,18 +69,21 @@ public class SandboxProductController {
     }
 
     @PostMapping("/profiles/{code}/default")
+    @RequirePermission("product:operate")
     public ApiResponse<Map<String, Object>> setDefault(
             @PathVariable Long productId, @PathVariable String code) {
         return ApiResponse.ok(profileService.setDefault(productId, code));
     }
 
     @DeleteMapping("/profiles/{code}")
+    @RequirePermission("product:operate")
     public ApiResponse<Void> deleteProfile(@PathVariable Long productId, @PathVariable String code) {
         profileService.deleteProfile(productId, code);
         return ApiResponse.ok(null);
     }
 
     @GetMapping("/profiles/{code}/preview")
+    @RequirePermission("product:view")
     public ApiResponse<Map<String, Object>> preview(
             @PathVariable Long productId,
             @PathVariable String code,

@@ -1,6 +1,7 @@
 import request from '../utils/request'
 
 export type ProductVersionStatus = 'PLANNING' | 'RELEASED' | 'INVALID'
+export type ProductRepoKind = 'BIZ' | 'TEST' | 'OTHER'
 
 export interface ProductVersionItem {
   id: number
@@ -18,6 +19,7 @@ export interface ProductCodeRepo {
   id?: number
   localPath: string
   label?: string | null
+  repoKind?: ProductRepoKind | null
   sortNo?: number
 }
 
@@ -48,7 +50,7 @@ export interface ProductSavePayload {
   managerUserId?: number | null
   wikiNodeId?: number | null
   wikiCreate?: { parentId?: number | null; displayName: string } | null
-  codeRepos?: { localPath: string; label?: string }[]
+  codeRepos?: { localPath: string; label?: string; repoKind?: ProductRepoKind }[]
 }
 
 export interface ProductVersionSavePayload {
