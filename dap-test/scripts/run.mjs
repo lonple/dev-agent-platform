@@ -20,10 +20,79 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repo = path.dirname(root);
 const id = `${Date.now().toString(36)}${crypto.randomBytes(2).toString('hex')}`;
 const runRoot = path.join(root, '.runtime', id);
+
+// —— 配置解析 ——
+// 取值优先级固定为：进程环境变量 > dap-test/.env > 仓库根 .env > 内置默认值。
+// dotenv 未安装 / .env 缺失时用下方轻量解析兜底，避免“配置取不到”直接表现为“集成测试不通过”。
+const ENV_DEFAULTS = {
+  DAP_TEST_API_URL: 'http://localhost:8080',
+  DAP_TEST_UI_URL: 'http://localhost:5173',
+  DAP_TEST_MODEL_MODE: 'mock',
+};
+const STRICT = ['1', 'true', 'yes', 'on'].includes(String(process.env.DAP_TEST_STRICT || '').trim().toLowerCase());
+const ENV_FILES = [path.join(root, '.env'), path.join(repo, '.env')];
+
+// 轻量 .env 解析：支持空行/注释、export 前缀、成对引号、行尾注释；不覆盖已存在的进程环境变量。
+function parseEnvFile(text) {
+  const parsed = {};
+  for (const rawLine of String(text).split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const matched = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!matched) continue;
+    let value = matched[2].trim();
+    const quoted = (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"));
+    if (quoted && value.length >= 2) {
+      value = value.slice(1, -1);
+    } else {
+      value = value.replace(/\s+#.*$/, '').trim();
+    }
+    parsed[matched[1]] = value;
+  }
+  return parsed;
+}
+
+async function loadEnvFile(file) {
+  let text;
+  try {
+    text = await fsp.readFile(file, 'utf8');
+  } catch {
+    return null; // 文件不存在：交给下一级来源
+  }
+  let applied = 0;
+  for (const [key, value] of Object.entries(parseEnvFile(text))) {
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+      applied += 1;
+    }
+  }
+  return { file: path.relative(repo, file), applied };
+}
+
+const envApplied = [];
+for (const file of ENV_FILES) {
+  const result = await loadEnvFile(file);
+  if (result) envApplied.push(result);
+}
+
+const configNotes = [];
+function pick(name) {
+  const fromEnv = (process.env[name] || '').trim();
+  if (fromEnv) return fromEnv;
+  const fallback = ENV_DEFAULTS[name];
+  if (fallback === undefined) return '';
+  if (STRICT) {
+    console.error(`[dap-test] 严格模式下缺少配置 ${name}。取值来源链：进程环境变量 > dap-test/.env > 仓库根 .env > 内置默认值；请把这些变量写进 dap-test/.env（或仓库根 .env），或去掉 DAP_TEST_STRICT 以使用默认值 ${fallback}。`);
+    process.exit(1);
+  }
+  configNotes.push(`${name} 未从环境变量或 .env 取到，已回退默认值 ${fallback}`);
+  return fallback;
+}
+
 const trim = value => (value || '').replace(/\/+$/, '');
-const backend = trim(process.env.DAP_TEST_API_URL);
-const ui = trim(process.env.DAP_TEST_UI_URL);
-const modelMode = (process.env.DAP_TEST_MODEL_MODE || 'real').toLowerCase();
+const backend = trim(pick('DAP_TEST_API_URL'));
+const ui = trim(pick('DAP_TEST_UI_URL'));
+const modelMode = pick('DAP_TEST_MODEL_MODE').toLowerCase();
 const mockPort = Number(process.env.DAP_TEST_MOCK_PORT || 18202);
 const controlToken = crypto.randomBytes(24).toString('hex');
 let mocks;
@@ -44,9 +113,14 @@ async function reachable(url, label) {
 process.on('SIGINT', () => { exitCode = 130; test?.kill('SIGINT'); });
 process.on('SIGTERM', () => { exitCode = 130; test?.kill('SIGTERM'); });
 try {
-  if (!backend) throw new Error('DAP_TEST_API_URL is required (generated from the runtime profile test settings).');
-  if (!ui) throw new Error('DAP_TEST_UI_URL is required (generated from the runtime profile test settings).');
-  if (!['real', 'mock'].includes(modelMode)) throw new Error('DAP_TEST_MODEL_MODE must be real or mock');
+  const originText = envApplied.length
+    ? envApplied.map(item => `${item.file}${item.applied ? `(补齐 ${item.applied} 项)` : '(无新增项)'}`).join(' > ')
+    : '未找到 .env';
+  console.log(`[dap-test] 配置来源：进程环境变量 > ${originText}；生效值 API=${backend} UI=${ui} MODEL_MODE=${modelMode}`);
+  for (const note of configNotes) console.warn(`[dap-test] ${note}`);
+  if (!backend) throw new Error('DAP_TEST_API_URL 为空：请写入 dap-test/.env（或仓库根 .env），或由运行方案注入进程环境变量。');
+  if (!ui) throw new Error('DAP_TEST_UI_URL 为空：请写入 dap-test/.env（或仓库根 .env），或由运行方案注入进程环境变量。');
+  if (!['real', 'mock'].includes(modelMode)) throw new Error('DAP_TEST_MODEL_MODE 仅支持 real 或 mock');
   await fsp.mkdir(runRoot, { recursive: true });
   if (modelMode === 'mock') {
     // 被测后端已由运行方案把 Agent、审查模型和沙箱管理地址指向此端口；令牌与后端保持一致。
