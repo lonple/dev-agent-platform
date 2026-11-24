@@ -2,9 +2,9 @@
  * 流水线工作台 · 顶部信息带（DAP-0 修复）
  *
  * 现状（问题【附图1】红框）：
- *   第 1 行 .wb-top            → 返回需求 / 需求编号 / 需求名 / 状态标签 / 定义 / 刷新·取消
+ *   第 1 行 .wb-top             → 返回需求 / 需求编号 / 需求名 / 状态标签 / 定义 / 刷新·取消
  *   第 2 行 .execution-overview → 流程进度 17 / 18 个节点 + 进度条 + 94% + 0 个任务运行中 + 0 项待确认
- *   第 3 行 .summary           → 状态 已完成 | 节点进度 17/18 | 等待… | Worktree 1 个编码仓
+ *   第 3 行 .summary            → 状态 已完成 | 节点进度 17/18 | 等待… | Worktree 1 个编码仓
  *
  * 三条各自是块级容器（各有 padding / 边框 / 行高），合计占去 150–190px；
  * 且「状态」「节点进度」与第 1、2 行完全重复渲染。
@@ -16,30 +16,39 @@
  *   4) 隐藏 .summary 中与标题行/进度条重复的「状态」「节点进度」两项，仅保留等待提示与工作区；
  *   5) 零值小项胶囊化，不再各占一行。
  *
+ * 覆盖策略（评审项 I5 修正，勿回退为 !important）：
+ *   本文件需要覆盖 PipelineWorkbenchView.vue 中 <style scoped> 的同名规则。
+ *   scoped 会被编译成 `.wb-top[data-v-xxx]`（特异性 0,2,0）、`.wb-top .title[data-v-xxx]`（0,3,0），
+ *   全局单类选择器必然打不过，这也是此前整段依赖 !important 的原因。
+ *   现统一加应用根节点 `#app` 前缀提升特异性（ID 选择器权重恒高于任意数量的类选择器），
+ *   全部 !important 已移除；同一选择器的多条声明已合并到一处，消除「后写覆盖前写」的隐式冲突。
+ *   若后续仍有属性覆盖不住，请在本文件追加 `#app .xxx` 形式的更具体选择器并注明被覆盖的组件位置。
+ *
  * 约束：只做密度与去重，不改信息语义、不改模板与脚本、不新增色值（沿用 tokens / Element 语义色）。
  */
 
-/* ---------- 1. 标题行收紧 ---------- */
-.wb-top {
-  gap: 8px !important;
-  padding: 8px 12px !important;
-  min-height: 0 !important;
+/* ---------- 1. 标题行收紧（组件 .wb-top：min-height 76px / padding 18px 24px / flex-wrap） ---------- */
+#app .wb-top {
+  gap: 8px;
+  padding: 8px 12px;
+  min-height: 0;
   font-size: 13px;
 }
 
-.wb-top .title {
-  font-size: 14px !important;
-  line-height: 20px !important;
+/* 组件 .wb-top .title：font-size 18px / gap 12px */
+#app .wb-top .title {
+  font-size: 14px;
+  line-height: 20px;
 }
 
-.wb-top .btn {
+#app .wb-top .btn {
   height: 26px;
   padding: 0 10px;
   font-size: 12px;
 }
 
-/* 「定义 xxx」为次要信息，与需求名同义重复，窄屏优先收起 */
-.wb-top .metrics {
+/* 「定义 xxx」为次要信息，与需求名同义重复；组件内固定 display:none，窄屏兜底见文末 */
+#app .wb-top .metrics {
   color: var(--color-text-secondary, #909399);
   font-size: 12px;
   white-space: nowrap;
@@ -47,57 +56,72 @@
   text-overflow: ellipsis;
 }
 
-/* ---------- 2. 两条信息带合成一行 ---------- */
-.execution-overview,
-.summary {
+/* ---------- 2. 两条信息带合成一行 ----------
+ * 原文件此处为 `.execution-overview, .summary` 共享声明 + 分散在 §2/§8 的另一处 padding，
+ * 现拆成两个完整规则，各自只写一份声明。
+ * 组件的 .execution-overview / .summary 带整行底色与行底线（原为独立整行带），
+ * 合并成行后必须去掉，否则 inline 盒子上会出现多余色块与下划线。
+ */
+#app .execution-overview {
   display: inline-flex;
   align-items: center;
   vertical-align: middle;
   flex-wrap: wrap;
   gap: 6px 10px;
-  margin: 0 !important;
-  padding: 0;
+  margin: 0;
+  padding: 4px 0 6px;
+  border-bottom: 0;
+  background: transparent;
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-text-regular, #606266);
 }
 
-/* 两块之间的呼吸位，代替原本整行间距 */
-.summary {
-  margin-left: 10px !important;
-  padding-left: 10px;
+/* 组件 .summary：padding 10px 24px / font-size 11px / 灰色整行底；
+ * 合并成行后左侧用呼吸位 + 细分割线代替原本整行间距 */
+#app .summary {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0 0 0 10px;
+  padding: 4px 0 6px 10px;
+  border-bottom: 0;
   border-left: 1px solid var(--color-border, #e6e6e6);
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-regular, #606266);
 }
 
-/* ---------- 3. 去掉与 .summary 重复的「流程进度 xx / yy 个节点」 ---------- */
-.execution-overview .progress-copy {
-  display: none !important;
+/* ---------- 3. 去掉与 .summary 重复的「流程进度 xx / yy 个节点」（组件 .progress-copy：display flex / gap 14px） ---------- */
+#app .execution-overview .progress-copy {
+  display: none;
 }
 
 /* ---------- 4. 去掉 .summary 中重复的「状态」「节点进度」 ----------
  * summaryBits 渲染顺序固定为：状态 / 节点进度 / 等待 / 工作区，每项前有 .sep，
  * 故子节点为 [1]状态 [2]sep [3]节点进度 [4]sep [5]等待 [6]sep [7]工作区。
  * 状态已在 .wb-top 的 .tag 展示、节点进度已在进度条 + 百分比展示，无需二次渲染。
+ * 原 4 条 :nth-child(1..4) 规则合并为一条区间选择器。
  */
-.summary > span:nth-child(1),
-.summary > span:nth-child(2),
-.summary > span:nth-child(3),
-.summary > span:nth-child(4) {
-  display: none !important;
+#app .summary > span:nth-child(-n + 4) {
+  display: none;
 }
 
-/* ---------- 5. 进度条收紧为紧凑视觉单元 ---------- */
-.execution-overview .progress-track {
-  width: 120px !important;
-  height: 6px !important;
-  margin: 0 !important;
+/* ---------- 5. 进度条收紧为紧凑视觉单元（组件 .progress-track：width clamp(60px,12vw,180px) / height 5px） ---------- */
+#app .execution-overview .progress-track {
+  width: 120px;
+  height: 6px;
+  margin: 0;
   border-radius: 3px;
   background: #ebeef5;
   overflow: hidden;
   flex: 0 0 auto;
 }
 
-.execution-overview .progress-track > span {
+#app .execution-overview .progress-track > span {
   display: block;
   height: 100%;
   border-radius: 3px;
@@ -105,18 +129,18 @@
   transition: width 0.3s ease;
 }
 
-.execution-overview .overview-percent {
+#app .execution-overview .overview-percent {
   font-size: 12px;
   color: var(--color-text-secondary, #909399);
   white-space: nowrap;
 }
 
-/* ---------- 6. 概览小胶囊：留在一行，只压扁不换行 ---------- */
-.execution-overview .overview-stat {
+/* ---------- 6. 概览小胶囊：留在一行，只压扁不换行（组件 .overview-stat：display flex / gap 7px / gray-500） ---------- */
+#app .execution-overview .overview-stat {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin: 0 !important;
+  margin: 0;
   padding: 1px 8px;
   border-radius: 10px;
   background: #f5f7fa;
@@ -125,48 +149,38 @@
   white-space: nowrap;
 }
 
-.execution-overview .overview-stat.needs-attention {
+#app .execution-overview .overview-stat.needs-attention {
   background: #fdf6ec;
   color: var(--color-warning, #e6a23c);
 }
 
-.execution-overview .activity-dot {
+#app .execution-overview .activity-dot {
   width: 6px;
   height: 6px;
 }
 
 /* ---------- 7. 指标带排版：紧凑、分隔符弱化、数值加重 ---------- */
-.summary > span {
+#app .summary > span {
   white-space: nowrap;
 }
 
-.summary .sep {
+#app .summary .sep {
   color: var(--color-border, #dcdfe6);
   margin: 0 -2px;
 }
 
-.summary b {
+#app .summary b {
   color: var(--color-text-primary, #303133);
   font-weight: 600;
 }
 
-/* ---------- 8. 顶部两块整体内边距收紧（原各自上下 padding 叠加） ---------- */
-.execution-overview {
-  padding: 4px 0 6px !important;
-}
-
-.summary {
-  padding-top: 4px !important;
-  padding-bottom: 6px !important;
-}
-
-/* 窄屏：允许换行，不产生横向滚动 */
+/* 窄屏：压缩进度条、收起「定义」，不产生横向滚动 */
 @media (max-width: 1280px) {
-  .execution-overview .progress-track {
-    width: 88px !important;
+  #app .execution-overview .progress-track {
+    width: 88px;
   }
 
-  .wb-top .metrics {
-    display: none !important;
+  #app .wb-top .metrics {
+    display: none;
   }
 }

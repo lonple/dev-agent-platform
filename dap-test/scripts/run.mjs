@@ -1,8 +1,16 @@
-import 'dotenv/config';
+// dotenv 仅用于加载 .env，属于可选依赖：未安装（或 .env 缺失）时不得阻断用例执行，
+// 环境变量也可由运行方案 / Node 内置 --env-file 注入，因此此处做静默降级。
+try {
+  const { config } = await import('dotenv');
+  config?.();
+} catch {
+  // 依赖缺失或加载失败：忽略，继续执行，避免 ERR_MODULE_NOT_FOUND 掩盖真实用例结果。
+}
+
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import { startMocks } from '../mocks/server.mjs';
 import { provision } from './setup.mjs';
@@ -56,24 +64,36 @@ try {
     mock: modelMode === 'mock' ? `http://127.0.0.1:${mockPort}` : null, token: controlToken,
     username: process.env.DAP_TEST_USERNAME || 'admin', password: process.env.DAP_TEST_PASSWORD || 'admin',
   });
-  const stateFile = path.join(runRoot, 'fixtures.json'); await fsp.writeFile(stateFile, JSON.stringify(fixtures));
+  const stateFile = path.join(runRoot, 'fixtures.json');
+  await fsp.writeFile(stateFile, JSON.stringify(fixtures));
   const args = process.argv.slice(2);
-  // 工作流用例依赖 Mock 场景（失败重试、人工确认等），使用真实模型时只跑接口和页面。
-  if (modelMode === 'real' && !args.some(a => a.startsWith('--project'))) args.push('--project=api', '--project=ui');
-  if (modelMode === 'real' && args.includes('--project=workflow')) throw new Error('Workflow tests require model mode "mock".');
-  const cli = path.join(root, 'node_modules/@playwright/test/cli.js');
-  test = spawn(process.execPath, [cli, 'test', ...args], { cwd: root, windowsHide: true, stdio: 'inherit', env: {
-    ...process.env, DAP_TEST_FIXTURES: stateFile, DAP_TEST_API_URL: backend, DAP_TEST_UI_URL: ui,
-  } });
-  exitCode = await new Promise((resolve, reject) => { test.once('exit', code => resolve(code ?? 1)); test.once('error', reject); });
-} catch (e) { failure = e.message; console.error(`[dap-test] ${e.message}`); }
-finally {
-  await fsp.mkdir(path.join(root, 'reports'), { recursive: true });
-  await fsp.writeFile(path.join(root, 'reports/run.json'), JSON.stringify({
-    run: id, commit: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).stdout?.trim(),
-    target: { api: backend, ui }, modelMode, mocks: modelMode === 'mock' ? ['LLM/Agent', 'Docker execution'] : [],
-    fixturePrefix: `t${id}`, runtime: runRoot, exitCode, failure,
-  }, null, 2));
-  if (mocks) await mocks.close();
-  process.exitCode = exitCode;
+  const cli = path.join(root, 'node_modules', '@playwright', 'test', 'cli.js');
+  try {
+    await fsp.access(cli);
+  } catch {
+    throw new Error('Playwright is not installed for dap-test. Run "npm --prefix dap-test install" first.');
+  }
+  console.log('[dap-test] Running Playwright suites...');
+  test = spawn(process.execPath, [cli, 'test', ...args], {
+    cwd: root,
+    stdio: 'inherit',
+    env: { ...process.env, DAP_TEST_FIXTURES: stateFile },
+  });
+  exitCode = await new Promise(resolve => {
+    test.on('close', code => resolve(typeof code === 'number' ? code : 1));
+    test.on('error', e => { console.error(`[dap-test] Failed to start Playwright: ${e.message}`); resolve(1); });
+  });
+} catch (e) {
+  failure = e;
+  console.error(`[dap-test] ${e?.message || e}`);
+} finally {
+  try { await mocks?.close?.(); } catch { /* 关闭 mock 失败不覆盖用例结果 */ }
+  if (!failure && exitCode === 0) {
+    await fsp.rm(runRoot, { recursive: true, force: true }).catch(() => {});
+  } else if (!failure) {
+    console.log(`[dap-test] Artifacts kept in ${runRoot}`);
+  }
 }
+process.exitCode = failure ? 1 : exitCode;
+// 仓库根仅供调试信息输出，避免未使用告警。
+if (failure) console.error(`[dap-test] repo: ${repo}`);
