@@ -9,7 +9,8 @@
     "test:ui": "node scripts/run.mjs --project=ui",
     "test:workflow": "node scripts/run.mjs --project=workflow",
     "check": "tsc --noEmit",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "test:runtime": "node --test support/runtime.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",

@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 
 // 开发环境数据库长期保留：账号、租户编码均带本次运行前缀，避免与已有数据或上次运行冲突。
 export async function provision({ backend, runRoot, token, mock, id, username, password }) {
@@ -20,10 +19,9 @@ export async function provision({ backend, runRoot, token, mock, id, username, p
   const tenant = await call('/tenants', { code: `${prefix}_a`, name: `Test Tenant A ${prefix}`, status: 1, adminUserIds: [admin.user.id, users.owner.id] }, admin.token);
   const otherTenant = await call('/tenants', { code: `${prefix}_b`, name: `Test Tenant B ${prefix}`, status: 1, adminUserIds: [admin.user.id, users.other.id] }, admin.token);
   await call('/tenant-users', { userId: users.operator.id, tenantRole: 'OPERATOR' }, admin.token, tenant.id);
-  const repoPath = path.join(runRoot, 'repository'); await fs.mkdir(path.join(repoPath, 'src'), { recursive: true });
-  await fs.writeFile(path.join(repoPath, 'README.md'), '# Deterministic test repository\n');
-  await fs.writeFile(path.join(repoPath, 'src/example.txt'), 'original\n');
-  for (const args of [['init', '-b', 'main'], ['config', 'user.name', 'DAP Test'], ['config', 'user.email', 'dap-test@example.invalid'], ['add', '.'], ['commit', '-m', 'test fixture baseline']]) execFileSync('git', args, { cwd: repoPath, stdio: 'ignore' });
+  // 路径绑定用例只需要目录；Git 基线由仓库工作流按需创建。
+  const repoPath = path.join(runRoot, 'repository');
+  await fs.mkdir(repoPath, { recursive: true });
   const product = await call('/products', { code: 'TESTAPP', name: 'Test Product', managerUserId: users.owner.id, codeRepos: [{ localPath: repoPath, repoKind: 'BIZ' }] }, users.owner.token, tenant.id);
   const version = await call(`/products/${product.id}/versions`, { version: '1.0', status: 'PLANNING', planReleaseAt: '2030-01-01T00:00:00' }, users.owner.token, tenant.id);
   const otherProduct = await call('/products', { code: 'OTHERAPP', name: 'Other Product', managerUserId: users.other.id }, users.other.token, otherTenant.id);

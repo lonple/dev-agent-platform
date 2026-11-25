@@ -71,3 +71,11 @@ uv run --with pytest pytest -q
 ## 在 DAP 集成测试节点中执行
 
 在运行方案「沙箱执行配置」的测试命令中填写 `npm --prefix dap-test test`（留空时平台按根目录 `package.json` 自动识别为 `npm test`），执行超时按整套用例时长设置。沙箱镜像需预装 Node 与浏览器依赖；数据库地址须能从容器内访问。
+
+## 临时仓库与运行目录
+
+每轮测试在系统临时目录创建独立的 `dap-test-*` 目录，避免被编辑器识别为项目内的 Git 仓库。普通 API、页面及路径绑定用例只使用空目录；问题流水线首次调用 `Api.pipeline()` 时才执行一次 `git init` 和基线提交。
+
+测试结束后默认清理本轮目录（包括 Git 仓库及其 worktree），通过和失败均清理；HTML/JSON/JUnit 报告与 trace 仍由 Playwright 保存。排查需要保留现场时设置 `DAP_TEST_KEEP_RUNTIME=1`，控制台会打印保留位置。清理仅允许带本工具标记的系统临时目录，不扫描或删除业务仓库。
+
+运行 `npm run test:runtime` 可检查按需初始化、重复调用、保留与清理边界。

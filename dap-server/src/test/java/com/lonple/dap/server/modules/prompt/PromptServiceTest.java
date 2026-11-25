@@ -71,6 +71,9 @@ class PromptServiceTest {
         for (SysPrompt prompt : saved.getAllValues()) {
             assertNotNull(prompt.getContent(), prompt.getCode());
             assertFalse(prompt.getContent().isBlank(), prompt.getCode());
+            assertTrue(prompt.getContent().contains("协作协议 V2"), prompt.getCode());
+            assertTrue(prompt.getContent().contains("\"suggestions\""), prompt.getCode());
+            assertTrue(prompt.getContent().contains("# 岗位与阶段"), prompt.getCode());
             assertEquals(10L, prompt.getTenantId());
         }
         verify(mapper, never()).updateById(any(SysPrompt.class));

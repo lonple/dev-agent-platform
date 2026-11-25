@@ -329,18 +329,17 @@ def test_issue_fix_write_file_settles() -> None:
     assert _issue_fix_phase(msgs) == "PATCHED"
 
 
-def test_issue_fix_hard_block_explore_and_patched() -> None:
+def test_issue_fix_can_collect_evidence_before_and_after_patch() -> None:
     req = _req_issue_fix()
     explore_msgs = [_read_file_tm(f"r{i}") for i in range(5)]
     block = _delivery_hard_block_explore(req, "search_code", explore_msgs)
-    assert block is not None
-    assert block.startswith(_DELIVERY_HARD_BLOCK_MARK)
+    assert block is None
 
     patched = [_write_file_tm("w1"), _read_file_tm("a"), _read_file_tm("b"), _read_file_tm("c")]
     assert _issue_fix_phase(patched) == "PATCHED"
-    assert _delivery_hard_block_explore(req, "search_code", patched) is not None
-    assert _delivery_hard_block_explore(req, "list_dir", patched) is not None
-    assert _delivery_hard_block_explore(req, "read_file", patched) is not None
+    assert _delivery_hard_block_explore(req, "search_code", patched) is None
+    assert _delivery_hard_block_explore(req, "list_dir", patched) is None
+    assert _delivery_hard_block_explore(req, "read_file", patched) is None
 
 
 def test_search_counts_toward_unsettled() -> None:
@@ -369,14 +368,55 @@ def _req_issue_analysis() -> ChatStreamRequest:
     )
 
 
-def test_issue_analysis_short_budget_and_hard_block() -> None:
+def test_issue_analysis_keeps_budget_without_forcing_early_conclusion() -> None:
     from dap_agent.agents.workbench_agent import _max_tool_rounds
 
     req = _req_issue_analysis()
     assert _needs_delivery_window(req)
     assert _max_tool_rounds(req) <= 24
     msgs = [_read_tm(f"r{i}") for i in range(5)]
-    assert _delivery_hard_block_explore(req, "search_docs", msgs) is not None
+    assert _delivery_hard_block_explore(req, "search_docs", msgs) is None
+
+
+def test_stock_failure_analysis_is_read_only_until_fix_stage() -> None:
+    req = _req_issue_analysis()
+    req.file_index.taskTypeCode = "GEN_ISSUE_INT_TEST"
+    for name in ("read_file", "search_code", "read_docs", "list_code_repos"):
+        assert _maybe_short_circuit_tool(name, {}, [], req=req) is None
+    for name in ("write_file", "delete_file", "run_action", "write_output", "check_port"):
+        result = _maybe_short_circuit_tool(name, {}, [], req=req)
+        assert result is not None
+        assert "error" in json.loads(result)
+
+    req.file_index.codingStage = "INT_TEST_FIX"
+    assert _maybe_short_circuit_tool("write_file", {}, [], req=req) is None
+    assert _delivery_hard_block_explore(req, "search_code", [_write_file_tm("w1")]) is None
+    result = _maybe_short_circuit_tool("run_action", {"action": "test"}, [], req=req)
+    assert result is not None
+    assert "平台" in result
+
+
+def test_issue_analysis_cannot_mutate_source() -> None:
+    req = _req_issue_analysis()
+    for name in ("write_file", "delete_file", "run_action"):
+        assert _maybe_short_circuit_tool(name, {}, [], req=req) is not None
+    assert _maybe_short_circuit_tool("write_output", {"display_name": "问题原因分析.md"}, [], req=req) is None
+
+
+def test_stock_system_prompt_delegates_report_to_platform() -> None:
+    from dap_agent.agents.workbench_agent import build_system_prompt
+
+    req = _req_issue_analysis()
+    req.file_index.taskTypeCode = "GEN_ISSUE_INT_TEST"
+    req.file_index.codeRepos = ["/workspace"]
+    req.file_index.requireDeliverable = True
+    req.file_index.codingStage = "INT_TEST_FIX"
+    text = build_system_prompt(req)
+    assert "由平台真实复测" in text
+    assert "必须 write_output 该名" not in text
+    assert "本任务要求产出交付物" not in text
+    assert "至少一次 write_file" not in text
+    assert "PATCHED→禁止" not in text
 
 
 def test_issue_fix_list_dir_cap() -> None:

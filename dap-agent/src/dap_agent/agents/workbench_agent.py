@@ -61,13 +61,19 @@ def _task_type_code(req: ChatStreamRequest) -> str:
     return ((idx.taskTypeCode if idx else None) or "").strip().upper()
 
 
+def _is_evidence_first_task(req: ChatStreamRequest) -> bool:
+    return _task_type_code(req) in {
+        "GEN_ISSUE_ANALYSIS", "GEN_ISSUE_FIX", "GEN_ISSUE_INT_TEST"
+    }
+
+
 def _is_issue_fix_task(req: ChatStreamRequest) -> bool:
-    """问题修复：成功态优先 write_file，报告后补；走交付收窗但不拆四阶段。"""
+    """问题修复：以根因证据决定是否改码，最终交付修复报告。"""
     return _task_type_code(req) == "GEN_ISSUE_FIX"
 
 
 def _is_int_test_fix_task(req: ChatStreamRequest) -> bool:
-    """存量集成测试修复轮：必须 write_file；平台复测，无需 write_output 报告。"""
+    """存量集成测试修复轮：按确认范围处理，平台复测并归档报告。"""
     return _task_type_code(req) == "GEN_ISSUE_INT_TEST" and _coding_stage(req) == "INT_TEST_FIX"
 
 
@@ -268,76 +274,13 @@ def _delivery_hard_block_explore(
     """达 keep 或 PATCHED 纪律：硬拦探索工具（不打后端）。"""
     from dap_agent.config import settings
 
+    if _is_evidence_first_task(req):
+        return None
     n = (name or "").strip().lower()
     if n not in _EXPLORE_TOOL_NAMES:
         return None
     keep = max(1, int(settings.context_evidence_read_keep_turns))
     deliverable = _stage_deliverable_name(req) or "正式交付物"
-
-    if _is_code_patch_task(req):
-        phase = _issue_fix_phase(messages)
-        int_test_fix = _is_int_test_fix_task(req)
-        report = deliverable or ("问题修复报告.md" if not int_test_fix else "")
-        if phase == "PATCHED":
-            if n in {"search_docs", "search_code", "list_dir"}:
-                if int_test_fix:
-                    return (
-                        f"{_DELIVERY_HARD_BLOCK_MARK} 存量测修复已进入 PATCHED（已有 write_file）。"
-                        "禁止再 search/list 逛仓；请继续 write_file 补齐失败点，"
-                        "或用中文简述改动后结束（平台会检查 diff 并复测）。"
-                    )
-                return (
-                    f"{_DELIVERY_HARD_BLOCK_MARK} 问题修复已进入 PATCHED（已有 write_file）。"
-                    "禁止再 search/list 逛仓；请继续 write_file 补齐根因闭环，"
-                    f"修完后再 write_output「{report}」并写 **结论：已修复**；"
-                    "未修完可写 **结论：未完成**（平台会续修）。"
-                    "或对话 need_human_confirm JSON（禁止 write_output 确认档）。"
-                )
-            patched_keep = max(1, int(settings.issue_fix_patched_read_keep))
-            # PATCHED：write_file 可结算读配额
-            unsettled = _unsettled_explore_count(
-                messages,
-                write_file_settles=True,
-                tools=frozenset({"read_docs", "read_file"}),
-            )
-            if unsettled >= patched_keep and n in {"read_docs", "read_file"}:
-                if int_test_fix:
-                    return (
-                        f"{_DELIVERY_HARD_BLOCK_MARK} PATCHED 后未结算校验 read 已达 {unsettled} 次"
-                        f"（上限 {patched_keep}）。请 write_file 继续改码，或简述改动后结束；"
-                        "禁止继续只读（平台复测，无需 write_output 报告）。"
-                    )
-                return (
-                    f"{_DELIVERY_HARD_BLOCK_MARK} PATCHED 后未结算校验 read 已达 {unsettled} 次"
-                    f"（上限 {patched_keep}）。请 write_file 继续改码，或 write_output「{report}」"
-                    "（文末 **结论：已修复** / **结论：未完成**），禁止继续只读。"
-                )
-            return None
-        # EXPLORE
-        unsettled = _unsettled_explore_count(messages, write_file_settles=True)
-        if unsettled >= keep:
-            if int_test_fix:
-                return (
-                    f"{_DELIVERY_HARD_BLOCK_MARK} 存量测修复 EXPLORE 未结算探读/搜索已达 {unsettled} 次"
-                    f"（keep={keep}）。禁止继续 search/list/read；立刻 write_file 改失败点对应源码。"
-                )
-            return (
-                f"{_DELIVERY_HARD_BLOCK_MARK} EXPLORE 未结算探读/搜索已达 {unsettled} 次"
-                f"（keep={keep}）。禁止继续 search/list/read；"
-                f"立刻 write_file 改码，或 write_output「{report}」，"
-                "或对话输出 need_human_confirm JSON（禁止 write_output 确认档）。"
-            )
-        return None
-
-    if _is_issue_analysis_task(req):
-        unsettled = _unsettled_explore_count(messages, write_file_settles=False)
-        if unsettled >= keep:
-            return (
-                f"{_DELIVERY_HARD_BLOCK_MARK} 问题分析未结算探读/搜索已达 {unsettled} 次"
-                f"（keep={keep}）。禁止继续 search/list/read；"
-                f"立刻 write_output「{deliverable}」，或在对话输出 need_human_confirm JSON。"
-            )
-        return None
 
     if _coding_stage(req) == "CODING_TASK":
         unsettled = _unsettled_explore_count(messages, write_file_settles=True)
@@ -361,29 +304,26 @@ def _delivery_hard_block_explore(
 
 def _maybe_inject_review_window_nudge(req: ChatStreamRequest, messages: list) -> list:
     """交付/评审任务：未结算探索达到 keep 时注入提醒（硬拦在 short_circuit）。"""
+    if _is_evidence_first_task(req):
+        if _unsettled_explore_count(messages, write_file_settles=True) >= 5 and not any(
+            _DELIVERY_WINDOW_NUDGE_MARK in str(m.content)
+            for m in messages if isinstance(m, HumanMessage)
+        ):
+            return messages + [HumanMessage(content=(
+                f"{_DELIVERY_WINDOW_NUDGE_MARK} 请汇总已确认事实和证据缺口，针对缺口继续核实。"
+                "仅在修复阶段且证据支持时 write_file；分析阶段保持只读。无需改码时说明依据，禁止制造 diff。"
+                "仍须遵守本阶段工具权限、总轮次与目录浏览上限。"
+            ))]
+        return messages
     if not _needs_delivery_window(req):
         return messages
     from dap_agent.config import settings
 
     keep = max(1, int(settings.context_evidence_read_keep_turns))
-    code_patch = _is_code_patch_task(req)
-    int_test_fix = _is_int_test_fix_task(req)
     stage = _coding_stage(req)
-    if code_patch and _issue_fix_phase(messages) == "PATCHED":
-        patched_keep = max(1, int(settings.issue_fix_patched_read_keep))
-        unsettled = _unsettled_explore_count(
-            messages,
-            write_file_settles=False,
-            tools=frozenset({"read_docs", "read_file"}),
-        )
-        keep = patched_keep
-        write_settles_note = False
-    elif code_patch or stage in {"CODING_PLAN", "CODING_TASK"} or _is_issue_analysis_task(req):
-        write_settles = _write_file_settles_window(req) and not (
-            code_patch and _issue_fix_phase(messages) == "PATCHED"
-        )
-        unsettled = _unsettled_explore_count(messages, write_file_settles=write_settles)
-        write_settles_note = write_settles
+    if stage in {"CODING_PLAN", "CODING_TASK"}:
+        write_settles_note = _write_file_settles_window(req)
+        unsettled = _unsettled_explore_count(messages, write_file_settles=write_settles_note)
     elif _is_review_task(req):
         unsettled = _unsettled_read_count(messages, count_list_dir=False, write_file_settles=False)
         write_settles_note = False
@@ -425,43 +365,6 @@ def _maybe_inject_review_window_nudge(req: ChatStreamRequest, messages: list) ->
             f"{mark}未结算探读/搜索已达 {unsettled} 次"
             f"（keep={keep}）。立刻 write_file 或 write_output「{result}」；"
             "继续探索将被硬拦。"
-        )
-    elif code_patch and _issue_fix_phase(messages) == "PATCHED":
-        mark = _DELIVERY_WINDOW_NUDGE_MARK
-        if int_test_fix:
-            body = (
-                f"{mark}已改码（PATCHED），未结算校验 read 已达 {unsettled} 次"
-                f"（上限 {keep}）。请 write_file 继续或简述改动后结束；"
-                "禁止再 search/list；平台复测，无需 write_output 报告。"
-            )
-        else:
-            report = deliverable or "问题修复报告.md"
-            body = (
-                f"{mark}已改码（PATCHED），未结算校验 read 已达 {unsettled} 次"
-                f"（上限 {keep}）。必须 write_output「{report}」；"
-                "禁止再 search/list；继续只读将被硬拦。"
-            )
-    elif code_patch:
-        mark = _DELIVERY_WINDOW_NUDGE_MARK
-        if int_test_fix:
-            body = (
-                f"{mark}EXPLORE 未结算探读/搜索已达 {unsettled} 次"
-                f"（keep={keep}）。立刻 write_file 改失败点源码；继续探索将被硬拦。"
-            )
-        else:
-            report = deliverable or "问题修复报告.md"
-            body = (
-                f"{mark}EXPLORE 未结算探读/搜索已达 {unsettled} 次"
-                f"（keep={keep}）。立刻 write_file；改完再 write_output「{report}」。"
-                "继续探索将被硬拦。"
-            )
-    elif _is_issue_analysis_task(req):
-        mark = _DELIVERY_WINDOW_NUDGE_MARK
-        name = deliverable or "问题原因分析.md"
-        body = (
-            f"{mark}未结算探读/搜索已达 {unsettled} 次"
-            f"（keep={keep}）。立刻 write_output「{name}」，"
-            "或对话输出 need_human_confirm；继续探索将被硬拦。"
         )
     else:
         mark = _DELIVERY_WINDOW_NUDGE_MARK
@@ -638,6 +541,13 @@ def _maybe_short_circuit_tool(
     """交付硬拦 / 同范围再读 / list_dir 冷却与限次：不打后端，回指针。"""
     n = (name or "").strip()
     if req is not None:
+        if _is_int_test_fix_task(req) and n == "write_output":
+            return json.dumps({"error": "存量测试修复轮由平台复测并写报告，无需 write_output。"}, ensure_ascii=False)
+        if _task_type_code(req) == "GEN_ISSUE_INT_TEST" and not _is_int_test_fix_task(req):
+            if n not in {"read_docs", "search_docs", "read_file", "search_code", "list_dir", "list_code_repos"}:
+                return json.dumps({"error": "失败分析阶段只允许读取证据；不得改码、执行命令或写报告。请输出确认 JSON。"}, ensure_ascii=False)
+        if _is_issue_analysis_task(req) and n in {"write_file", "delete_file", "run_action"}:
+            return json.dumps({"error": "问题分析阶段不得修改源码或运行命令；请查证并输出分析报告。"}, ensure_ascii=False)
         hard = _delivery_hard_block_explore(req, n, messages)
         if hard is not None:
             return hard
@@ -688,8 +598,8 @@ def _maybe_short_circuit_tool(
             return json.dumps(
                 {
                     "error": (
-                        "存量测修复轮禁止 run_action 跑测/构建；请 write_file 改失败点源码。"
-                        "平台会在你结束后检查 diff 并自动复测。"
+                        "存量测修复轮禁止 run_action 跑测/构建；请核实失败证据并按确认范围处理。"
+                        "平台会在你结束后自动复测；无需改码时说明证据，禁止制造无意义 diff。"
                     )
                 },
                 ensure_ascii=False,
@@ -994,11 +904,11 @@ def build_system_prompt(req: ChatStreamRequest) -> str:
         if idx and idx.codingTaskId:
             parts.append(f"当前任务卡：{idx.codingTaskId}")
         deliverable = _stage_deliverable_name(req)
-        if deliverable:
+        if deliverable and _task_type_code(req) != "GEN_ISSUE_INT_TEST":
             parts.append(f"本阶段交付文件名：{deliverable}（必须 write_output 该名）")
         if idx and idx.taskRemark:
             parts.append(f"任务备注：{idx.taskRemark}")
-        if idx and idx.requireDeliverable and stage not in {"CODING_PLAN", "CODING_TASK"}:
+        if idx and idx.requireDeliverable and stage not in {"CODING_PLAN", "CODING_TASK"} and _task_type_code(req) != "GEN_ISSUE_INT_TEST":
             parts.append("本任务要求产出交付物，完成后务必 write_output。")
         if idx and idx.standardsContent and stage != "CODING_PLAN":
             path_hint = f"「{idx.standardsPath}」" if idx.standardsPath else "会话绑定的规范"
@@ -1013,7 +923,7 @@ def build_system_prompt(req: ChatStreamRequest) -> str:
                     idx.standardsContent,
                 ]
             )
-        if idx and idx.deliverableTemplate and stage not in {"CODING_PLAN", "CODING_TASK"}:
+        if idx and idx.deliverableTemplate and stage not in {"CODING_PLAN", "CODING_TASK"} and _task_type_code(req) != "GEN_ISSUE_INT_TEST":
             if idx.outputTemplatePath:
                 parts.append(
                     f"输出参考模板（来自知识库「{idx.outputTemplatePath}」）。"
@@ -1037,7 +947,7 @@ def build_system_prompt(req: ChatStreamRequest) -> str:
             parts.append("本地代码仓库（仅本机路径，当前版本）：")
             for i, p in enumerate(idx.codeRepos):
                 parts.append(f"- repoIndex={i}: {p}")
-            auto_test = _is_auto_test_task(idx.taskTypeCode, idx.taskTypeName)
+            auto_test = _task_type_code(req) != "GEN_ISSUE_INT_TEST" and _is_auto_test_task(idx.taskTypeCode, idx.taskTypeName)
             task_kind = "自动化测试" if auto_test else "编码"
             if stage == "CODING_PLAN":
                 from dap_agent.config import settings
@@ -1080,34 +990,21 @@ def build_system_prompt(req: ChatStreamRequest) -> str:
                         "不得把本次测试启动的服务留在后台。",
                     ]
                 )
-            elif _is_int_test_fix_task(req):
-                from dap_agent.config import settings
-
-                cap = max(1, int(settings.issue_fix_max_list_dir))
-                patched_keep = max(1, int(settings.issue_fix_patched_read_keep))
-                parts.extend(
-                    [
-                        "存量集成测试修复两阶段：EXPLORE→立刻 write_file 改失败点；"
-                        f"PATCHED→禁止 search/list，最多 {patched_keep} 次校验 read，然后结束。",
-                        "以平台失败报告与人确认建议为准定点改码；"
-                        f"list_dir 全会话最多 {cap} 次。禁止跑全量测试、禁止 write_output 报告（平台复测）。",
-                        "成功态=至少一次 write_file；只聊天不算完成。",
-                    ]
+            elif _task_type_code(req) == "GEN_ISSUE_INT_TEST":
+                parts.append(
+                    "存量集成测试由平台执行并归档报告。失败分析阶段仅允许读取报告、日志、代码和契约证据，"
+                    "不得写文件或执行命令；分类说明代码、用例、环境或待核实原因，输出确认 JSON。"
+                    if not _is_int_test_fix_task(req) else
+                    "按人已确认的范围核实并处理失败点；可定点搜索和阅读验证修复。"
+                    "不自己跑全量测试、不 write_output 报告，结束后由平台真实复测。"
+                    "无需源码修改时给出证据，禁止为产生 diff 修改无关代码或迁移脚本。"
                 )
             elif _is_issue_fix_task(req):
-                from dap_agent.config import settings
-
-                cap = max(1, int(settings.issue_fix_max_list_dir))
-                patched_keep = max(1, int(settings.issue_fix_patched_read_keep))
-                parts.extend(
-                    [
-                        "问题修复两阶段：EXPLORE→尽快 write_file；PATCHED→禁止 search/list，"
-                        f"最多 {patched_keep} 次校验 read，立刻 write_output「问题修复报告.md」。",
-                        "先读《问题原因分析》与问题单；按根因定点 search_code/read_file；"
-                        f"list_dir 全会话最多 {cap} 次。search/read/list 均计入收窗，达 keep 硬拦。",
-                        "改完一刀禁止再逛仓。需要启动服务时用 start_gradle/start_dev + check_port；"
-                        "结束用 stop_dev/stop_port。",
-                    ]
+                parts.append(
+                    "先核实问题单、原因分析与当前实现，再在授权范围内做最小必要修改。"
+                    "修改前后均可定点检索、阅读和验证；不得因阅读次数强行写代码。"
+                    "无需修改时给出证据与实际验证结果；正式交付为问题修复报告.md。"
+                    "仅真实业务决策需要确认；不得编造执行结果，不得制造无意义 diff。"
                 )
             elif stage == "CODING_TASK":
                 from dap_agent.config import settings
@@ -1180,45 +1077,11 @@ def build_system_prompt(req: ChatStreamRequest) -> str:
                         "- 工具轮次打满会硬失败并中止，不会自动汇总。",
                     ]
                 )
-            elif _is_int_test_fix_task(req):
-                cap = max(1, int(settings.issue_fix_max_list_dir))
-                patched_keep = max(1, int(settings.issue_fix_patched_read_keep))
-                parts.extend(
-                    [
-                        "",
-                        "## 存量测修复滚动窗（必须遵守）",
-                        "- EXPLORE：search/read/list 均计入；未结算达 keep 硬拦，必须 write_file。",
-                        f"- PATCHED：禁止 search/list；校验 read≤{patched_keep}，然后简述改动结束。",
-                        "- 禁止跑全量测试；禁止 write_output 报告（平台检查 diff 后复测）。",
-                        f"- list_dir≤{cap}；成功态=至少一次 write_file。",
-                        "- 工具轮次打满硬失败。",
-                    ]
-                )
-            elif _is_issue_fix_task(req):
-                cap = max(1, int(settings.issue_fix_max_list_dir))
-                patched_keep = max(1, int(settings.issue_fix_patched_read_keep))
-                parts.extend(
-                    [
-                        "",
-                        "## 问题修复滚动窗（必须遵守）",
-                        "- EXPLORE：search/read/list 均计入；未结算达 keep 硬拦，必须 write_file。",
-                        f"- PATCHED：禁止 search/list；校验 read≤{patched_keep}，"
-                        "必须 write_output「问题修复报告.md」或对话 need_human_confirm JSON。",
-                        "- 禁止 write_output「*确认*」；确认只能走对话 JSON。",
-                        f"- list_dir≤{cap}；改完一刀禁止再逛仓；收尾短预算。",
-                        "- 工具轮次打满硬失败，不自动汇总。",
-                    ]
-                )
-            elif _is_issue_analysis_task(req):
-                parts.extend(
-                    [
-                        "",
-                        "## 问题分析滚动窗（必须遵守）",
-                        "- 先读问题单，少搜早写；search/read/list 均计入收窗。",
-                        f"- 未结算达 {keep} 次硬拦探索；必须 write_output「问题原因分析.md」"
-                        "或对话 need_human_confirm。",
-                        "- 禁止 write_output「*确认*.json」；短预算。",
-                    ]
+            elif _is_evidence_first_task(req):
+                parts.append(
+                    "证据处理：先汇总已知事实，再定点核实缺口；区分事实、推断和待验证项。"
+                    "不限制为固定几次阅读后必须写文件，但仍遵守总轮次、目录上限和去重规则。"
+                    "仅对需要人选择的方案提交确认 JSON；可自行查证的事实不转交给人。"
                 )
             else:
                 parts.extend(

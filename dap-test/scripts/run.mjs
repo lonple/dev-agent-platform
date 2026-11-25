@@ -14,12 +14,13 @@ import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import { startMocks } from '../mocks/server.mjs';
 import { provision } from './setup.mjs';
+import { createRuntimeDirectory, cleanupRuntimeDirectory } from '../support/runtime.mjs';
 
 // 对运行中的 DAP 开发环境执行测试。数据库、构建、服务启动均由运行方案负责，本脚本不创建或删除数据库。
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repo = path.dirname(root);
 const id = `${Date.now().toString(36)}${crypto.randomBytes(2).toString('hex')}`;
-const runRoot = path.join(root, '.runtime', id);
+let runRoot;
 
 // —— 配置解析 ——
 // 取值优先级固定为：进程环境变量 > dap-test/.env > 仓库根 .env > 内置默认值。
@@ -121,7 +122,7 @@ try {
   if (!backend) throw new Error('DAP_TEST_API_URL 为空：请写入 dap-test/.env（或仓库根 .env），或由运行方案注入进程环境变量。');
   if (!ui) throw new Error('DAP_TEST_UI_URL 为空：请写入 dap-test/.env（或仓库根 .env），或由运行方案注入进程环境变量。');
   if (!['real', 'mock'].includes(modelMode)) throw new Error('DAP_TEST_MODEL_MODE 仅支持 real 或 mock');
-  await fsp.mkdir(runRoot, { recursive: true });
+  runRoot = await createRuntimeDirectory();
   if (modelMode === 'mock') {
     // 被测后端已由运行方案把 Agent、审查模型和沙箱管理地址指向此端口；令牌与后端保持一致。
     mocks = await startMocks({
@@ -162,10 +163,12 @@ try {
   console.error(`[dap-test] ${e?.message || e}`);
 } finally {
   try { await mocks?.close?.(); } catch { /* 关闭 mock 失败不覆盖用例结果 */ }
-  if (!failure && exitCode === 0) {
-    await fsp.rm(runRoot, { recursive: true, force: true }).catch(() => {});
-  } else if (!failure) {
-    console.log(`[dap-test] Artifacts kept in ${runRoot}`);
+  const keepRuntime = ['1', 'true'].includes(String(process.env.DAP_TEST_KEEP_RUNTIME || '').toLowerCase());
+  try {
+    const removed = runRoot ? await cleanupRuntimeDirectory(runRoot, keepRuntime) : true;
+    if (!removed) console.log(`[dap-test] Runtime kept by DAP_TEST_KEEP_RUNTIME: ${runRoot}`);
+  } catch (error) {
+    console.warn(`[dap-test] Runtime cleanup failed at ${runRoot}: ${error.message}`);
   }
 }
 process.exitCode = failure ? 1 : exitCode;

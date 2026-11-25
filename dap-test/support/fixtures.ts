@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { ensureTestRepository } from './runtime.mjs';
 import { test as base, expect } from '@playwright/test';
 
 let sequence = 0;
@@ -34,6 +35,7 @@ export class Api {
   async requirement() { return this.post('/requirements', { name: unique('Requirement'), productId: this.f.productId, productVersionId: this.f.versionId, description: 'Given an order, users can inspect its status.' }); }
   async issue() { return this.post('/issues', { productId: this.f.productId, description: unique('Issue'), steps: 'Open the detail page', expectedResult: 'Expected data is displayed', handlerId: this.f.users.owner.id }); }
   async pipeline(issueId: number) {
+    await ensureTestRepository(this.f.repoPath);
     const value = await this.post('/pipeline/instances', { issueId });
     const id = value.id ?? value.instanceId;
     this.instances.push(id); return id as number;

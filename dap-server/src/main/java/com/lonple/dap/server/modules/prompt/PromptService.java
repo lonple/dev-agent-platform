@@ -210,7 +210,14 @@ public class PromptService {
             if (!StringUtils.hasText(content)) {
                 throw new IllegalStateException("empty default prompt");
             }
-            return content;
+            ClassPathResource common = new ClassPathResource("prompt-defaults/_COMMON.md");
+            try (var commonInput = common.getInputStream()) {
+                String protocol = StreamUtils.copyToString(commonInput, StandardCharsets.UTF_8);
+                if (!StringUtils.hasText(protocol)) {
+                    throw new IllegalStateException("empty common prompt protocol");
+                }
+                return protocol.strip() + "\n\n" + content;
+            }
         } catch (Exception e) {
             log.warn("load default prompt failed path={}: {}", classpath, e.getMessage());
             throw new BizException("默认提示词读取失败：" + classpath);

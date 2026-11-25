@@ -1727,7 +1727,7 @@ public class PipeRuntimeService {
                 sb.append("关联需求=").append(subject.requirement().getReqNo())
                         .append("；").append(subject.requirement().getName()).append('\n');
             }
-            if (!codingMid) {
+            if (!codingMid && !isIssueStockIntTest(taskCode)) {
                 sb.append("输出文件名=").append(spec.formalOutputName());
                 if (isIssueConfirmJsonTask(taskCode)) {
                     // 不点名「*-确认.md」：避免 Agent 误当成自己要 write_output 的交付物
@@ -1747,7 +1747,7 @@ public class PipeRuntimeService {
                 sb.append("材料：必填输入为 Wiki「问题单.md」（含描述/实现步骤/预期结果/已有方案；步骤中的截图为 Markdown 图片链接）；")
                         .append("请先查看会话材料索引（inputs/contexts/模板/规范），用 read_docs 按需读取；");
             }
-            if (!codingMid) {
+            if (!codingMid && !isIssueStockIntTest(taskCode)) {
                 sb.append("正式产出用 write_output，display_name 必须为「")
                         .append(spec.formalOutputName()).append("」。");
                 if (isIssueConfirmJsonTask(taskCode)) {
@@ -1755,7 +1755,7 @@ public class PipeRuntimeService {
                 }
                 sb.append('\n');
             } else {
-                sb.append("本阶段按下方编码阶段说明写出指定 JSON/文件。\n");
+                sb.append("本阶段按下方说明执行；存量测试报告由平台生成，其余任务写出指定 JSON/文件。\n");
             }
             if (StringUtils.hasText(issue.getDescription())) {
                 sb.append("\n【问题描述·摘要】\n").append(issue.getDescription()).append('\n');
@@ -1784,7 +1784,7 @@ public class PipeRuntimeService {
             if (isIntTestTask(unit.getTaskTypeCode())) {
                 sb.append("\n【集成测试·按人确认修复】根据回灌：agree=true 的建议必须落实；")
                         .append("agree=false 的项按 comment 原因处理（可不按原建议改）。\n")
-                        .append("只 write_file 定点修改；禁止广搜逛仓；不要自己跑全量测试、不要 write_output 报告——")
+                        .append("先核实证据，再按确认范围做必要处理；不强制源码变更。不要自己跑全量测试、不要 write_output 报告——")
                         .append("平台会自动复测；仍失败会再分析并等人确认。\n");
             } else {
                 sb.append("请根据确认继续：若仍有不确定输出 need_human_confirm JSON；否则继续改码至根因闭环，")
@@ -1794,7 +1794,7 @@ public class PipeRuntimeService {
                 && job.getPayloadJson() != null && job.getPayloadJson().contains("resumeIncompleteFix")) {
             sb.append("\n【续修】").append(job.getPayloadJson()).append('\n');
         } else if (PipeJobTypes.INT_TEST_FIX.equals(job.getJobType())) {
-            sb.append("\n【集成测试·修复轮】按人确认的建议 write_file 定点修改；禁止逛仓；")
+            sb.append("\n【集成测试·修复轮】核实证据并按人确认范围处理，无需修改时说明依据；")
                     .append("不要自己跑测/写报告，平台随后自动复测。\n");
             if (job.getPayloadJson() != null) {
                 sb.append(job.getPayloadJson()).append('\n');
@@ -1839,16 +1839,14 @@ public class PipeRuntimeService {
                         .append("无意见也算结算；禁止连续只读不评。同范围勿反复 read；勿短间隔重复 list_dir。")
                         .append("结算后更早原文会被压缩。工具轮次打满将硬失败并中止，不会自动汇总交付物。\n");
             } else if ("GEN_ISSUE_ANALYSIS".equalsIgnoreCase(taskCode)) {
-                sb.append("\n【问题分析纪律】先读问题单，少搜早写。不确定时只在对话输出 need_human_confirm JSON，禁止 write_output「*确认*.json」。")
-                        .append("未结算探读/搜索约 5 次后系统硬拦探索；必须 write_output「问题原因分析.md」。短预算，禁止广搜 Wiki。\n");
+                sb.append("\n【问题分析】核实问题单、日志与相关实现，区分事实、推断和待验证项。")
+                        .append("允许定点补充证据；仅真实决策走确认 JSON，分析结论写入「问题原因分析.md」。\n");
             } else if ("GEN_ISSUE_FIX".equalsIgnoreCase(taskCode)) {
-                sb.append("\n【问题修复两阶段】EXPLORE：定点读《问题原因分析》后尽快 write_file；探读/搜索约 5 次未结算则硬拦。")
-                        .append("PATCHED（已有 write_file）：禁止 search/list；少量校验 read 后必须 write_output「问题修复报告.md」。")
-                        .append("有不确定时只在对话输出 need_human_confirm JSON，禁止 write_output「*确认*」文档。")
-                        .append("改完一刀禁止再逛仓；收尾短预算。工具轮次打满硬失败。\n");
+                sb.append("\n【问题修复】核实根因后最小修改；修改后允许继续阅读、搜索与验证。")
+                        .append("无需修改时说明证据；禁止制造无意义 diff；正式交付「问题修复报告.md」。\n");
             } else if (isIssueStockIntTest(taskCode)) {
-                sb.append("\n【存量集成测试】由平台直接跑测并出报告；失败时你只做失败分析建议（确认 JSON），")
-                        .append("人同意后再定点 write_file；复测仍由平台执行。禁止空转探仓。\n");
+                sb.append("\n【存量集成测试】由平台跑测并归档报告；失败分析只读核实，输出确认 JSON。")
+                        .append("人确认后按授权范围处理，是否通过由平台真实复测决定，无需强行制造源码改动。\n");
             } else if (isIntTestTask(taskCode)) {
                 sb.append("\n【集成测试】执行自动化并 write_output「集成测试报告.md」。")
                         .append("通过写 **结论：通过**；不通过写 **结论：不通过**，由平台/人确认后再修。\n");
@@ -1917,7 +1915,7 @@ public class PipeRuntimeService {
     }
 
     /**
-     * 人确认后：LLM 按同意项修复；无源码 diff 则禁止复测并回队续修；有 diff 再由平台复测。
+     * 人确认后：LLM 按同意项处理；无论是否产生源码 diff，均由平台实际复测判定。
      */
     private void runIssueStockIntTestFixThenRetest(
             PipeInstance inst,
@@ -1928,14 +1926,6 @@ public class PipeRuntimeService {
             List<PipeRepoWorktree> worktrees,
             PipeJob job,
             PipeSubject subject) throws Exception {
-        int emptyFixAttempt = 0;
-        if (job != null && StringUtils.hasText(job.getPayloadJson())) {
-            try {
-                emptyFixAttempt = objectMapper.readTree(job.getPayloadJson()).path("emptyFixAttempt").asInt(0);
-            } catch (Exception ignored) {
-                emptyFixAttempt = 0;
-            }
-        }
         String kickoff = buildKickoffMessage(unit, node, subject, job);
         String lastReport = readSessionOutputContent(session, "集成测试报告.md");
         if (!StringUtils.hasText(lastReport)) {
@@ -1949,59 +1939,18 @@ public class PipeRuntimeService {
             kickoff = kickoff + "\n\n【上一轮平台测试失败报告】\n" + excerpt + "\n";
         }
         kickoff = kickoff
-                + "\n【纪律·必须遵守】成功态=至少一次 write_file 改到失败点对应源码；"
-                + "禁止只读/搜/跑测不改；禁止 list_dir 逛仓；不要自己跑全量测试、不要 write_output 报告。"
-                + "改完用中文简述改动文件即可，平台会检查 git diff 后再复测。\n";
-        if (emptyFixAttempt > 0) {
-            kickoff = kickoff
-                    + "\n【系统驳回】上一轮修复未产生任何源码变更（worktree 干净）。"
-                    + "本轮必须 write_file 落到 bms-server（或失败用例指向的模块）src/main/java；"
-                    + "只聊天说明不算完成。\n";
-        }
+                + "\n【修复范围】核实失败证据，按已确认项做最小必要处理；修改后允许定点补证。"
+                + "无需源码修改时说明依据，禁止制造无意义 diff。不要自己跑全量测试或写测试报告，"
+                + "结束后由平台实际复测，不能将未执行的验证写成通过。\n";
         unit.setErrorMessage("按确认结果修复中…");
         unitInstanceMapper.updateById(unit);
         Map<String, String> fixMeta = new LinkedHashMap<>();
         fixMeta.put("codingStage", "INT_TEST_FIX");
-        fixMeta.put("taskRemark", "存量集成测试修复：必须 write_file 出 diff；禁止只探不改；无需写报告。");
+        fixMeta.put("taskRemark", "存量集成测试修复：按确认范围处理并提供证据，由平台复测并归档；禁止制造无意义 diff。");
         agentExecutor.run(session, kickoff, unit.getId(), List.of(), fixMeta);
 
         if (!anyWorktreeDirty(worktrees)) {
-            int nextEmpty = emptyFixAttempt + 1;
-            if (nextEmpty >= 3) {
-                unit.setStatus("FAILED");
-                unit.setErrorMessage("修复轮连续 " + nextEmpty + " 次未产生源码变更（无 write_file/diff），已停止");
-                unit.setFinishedAt(LocalDateTime.now());
-                unitInstanceMapper.updateById(unit);
-                failNode(node, unit.getErrorMessage());
-                log.warn("int-test fix empty-diff exhausted unit={} attempts={}", unit.getId(), nextEmpty);
-                return;
-            }
-            releaseCodingSessionQuietly(unit, job);
-            clearUnitSessionForNextCodingStage(unit);
-            unit.setStatus("RUNNING");
-            unit.setFinishedAt(null);
-            unit.setErrorMessage("修复轮未改任何源码，已回队强制续修（第 " + nextEmpty + " 次）");
-            unitInstanceMapper.updateById(unit);
-            PipeJob again = newJob(inst.getId(), unit.getId(), PipeJobTypes.INT_TEST_FIX);
-            ObjectNode payload = objectMapper.createObjectNode();
-            payload.put("emptyFixAttempt", nextEmpty);
-            payload.put("reason", "no_source_diff");
-            if (job != null && StringUtils.hasText(job.getPayloadJson())) {
-                try {
-                    JsonNode prev = objectMapper.readTree(job.getPayloadJson());
-                    if (prev.has("findings") || prev.has("questions")) {
-                        payload.set("findings", prev.path("findings"));
-                        payload.set("questions", prev.path("questions"));
-                    }
-                } catch (Exception ignored) {
-                    // keep emptyFix only
-                }
-            }
-            again.setPayloadJson(payload.toString());
-            jobMapper.insert(again);
-            log.warn("int-test fix empty-diff unit={} → requeue INT_TEST_FIX attempt={}",
-                    unit.getId(), nextEmpty);
-            return;
+            log.info("int-test fix has no source diff unit={}; platform will verify by retesting", unit.getId());
         }
 
         try {
@@ -2017,7 +1966,7 @@ public class PipeRuntimeService {
             log.warn("int-test fix auto-commit failed unit={}: {}", unit.getId(), e.getMessage());
         }
 
-        unit.setErrorMessage("修复完成，平台复测中…");
+        unit.setErrorMessage("处理完成，平台复测中…");
         unitInstanceMapper.updateById(unit);
         runIssueStockIntTestPlatformFirst(inst, unit, node, requirement, session, worktrees, job);
     }
@@ -2077,22 +2026,27 @@ public class PipeRuntimeService {
         persistNamedOutput(unit, "集成测试报告-r" + nextRound + ".md", archive, false);
 
         String excerpt = archive == null ? "" : archive.trim();
-        if (excerpt.length() > 5000) {
-            excerpt = excerpt.substring(0, 5000) + "…";
+        if (excerpt.length() > 20000) {
+            excerpt = excerpt.substring(0, 20000) + "…（摘要截断，请读取本轮完整报告）";
         }
         unit.setErrorMessage("测试未通过，LLM 分析失败原因中…");
         unitInstanceMapper.updateById(unit);
 
-        String analyzeKickoff = ""
-                + "【存量集成测试·失败分析】平台已直接跑完存量自动化且未通过。\n"
-                + "请只根据下方测试报告分析失败原因，并给出可执行的处理建议。\n"
-                + "禁止 list_dir / search_code / read_file 逛仓；禁止 write_file / run_action / write_output。\n"
-                + "只输出 need_human_confirm JSON（不要 Markdown 报告），字段：\n"
-                + "- phase: need_human_confirm\n"
-                + "- findings: 对象数组，每项含 id、title（失败原因）、suggestion（处理建议，须写清改代码兼容还是改用例，以及改哪里）、recommend（可选）\n"
-                + "- openQuestions: []（可空）\n\n"
-                + "【平台测试报告】\n"
-                + excerpt;
+        SysPosition analysisPosition = positionService.findByCode(unit.getPositionCode());
+        PromptVO analysisPrompt = analysisPosition == null ? null
+                : promptService.findByPositionAndTaskType(analysisPosition.getId(), unit.getTaskTypeCode());
+        String rolePrompt = analysisPrompt != null && StringUtils.hasText(analysisPrompt.getContent())
+                ? analysisPrompt.getContent() + "\n\n" : "";
+        String analyzeKickoff = rolePrompt
+                + "【集成测试·失败分析】平台已执行测试且未通过，测试报告见下方。\n"
+                + "允许只读核实本轮完整报告、失败日志、相关用例与实现契约；勿无目标浏览仓库。\n"
+                + "报告可能截断；需确认报告属于本次执行，不能把历史结果作为本轮证据。\n"
+                + "禁止 write_file / delete_file / run_action / write_output，不得改码或重跑测试。\n"
+                + "区分代码缺陷、用例偏差、环境故障和证据不足；每项说明依据与可执行建议。\n"
+                + "不要猜测已经由平台检查通过的前置条件失败。仅确认需要人选择的处理方案。\n"
+                + "只输出 phase=need_human_confirm JSON；findings 为对象数组，含 id、title、"
+                + "suggestions（字符串数组）、recommend（推荐建议字符串）；openQuestions 为 id/question 对象数组。\n\n"
+                + "【平台测试报告】\n" + excerpt;
 
         String reply = agentExecutor.run(session, analyzeKickoff, unit.getId(), List.of(), null);
         JsonNode confirm = agentExecutor.tryParseConfirmJson(reply);
@@ -2544,6 +2498,9 @@ public class PipeRuntimeService {
                 row.put("title", StringUtils.hasText(title) ? title : ("发现项 " + i));
                 if (f.hasNonNull("severity")) {
                     row.put("severity", f.path("severity").asText(""));
+                }
+                if (f.path("recommend").isTextual() && StringUtils.hasText(f.path("recommend").asText())) {
+                    row.put("recommend", f.path("recommend").asText());
                 }
                 if (f.has("suggestion") || f.has("suggestions") || f.has("conclusion")) {
                     String advice = firstRawText(f, "suggestion", "conclusion");
